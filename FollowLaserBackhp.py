@@ -2,13 +2,15 @@
 import cv2
 import cv2.cv as cv
 import numpy as np
+import serial
+import time
 
 cap = cv2.VideoCapture(0)
 prev = np.empty((1920,640,3))
 diff = np.empty((480,640,3))
 avgBright = 0;
 detector = cv2.SimpleBlobDetector()
-
+set = serial.Serial('<ls /dev/tty*'>,9600)
 
 ranThrough = False
 
@@ -43,7 +45,7 @@ def removeNonRed(img):
     r2 = cv2.bitwise_and(r,r,mask=deltaB)
     g2 = cv2.bitwise_and(r2,r2,mask=deltaG)
     img = cv2.merge((r2,r2,r2))
-    cv2.imshow('test',img)
+    #cv2.imshow('test',img)
     img = cv2.cvtColor(img,cv2.COLOR_BGR2HSV)
     return img;
 
@@ -81,12 +83,12 @@ def edgeDetection(img):
 
 while True:
     img = getFrame()
-    cv2.imshow('Raw',img)
+    #cv2.imshow('Raw',img)
     #img = normalizeBrightness(img)
     img = reduceBrightness(img)
-    cv2.imshow('afterbright',img)
+    #cv2.imshow('afterbright',img)
     img = removeNonRed(img)
-    cv2.imshow('afterRed',img)
+    #cv2.imshow('afterRed',img)
     _,_,img = cv2.split(img)
     maxVal = np.amax(img)
 
@@ -105,13 +107,13 @@ while True:
         cv2.line(img,(0,y),(img.shape[1],y),255,10)
         cv2.line(img,(x,0),(x,img.shape[0]),255,10)
         if(x-img.shape[0]/2 < 50 and x-img.shape[0]/2 > -50):
-            print("Forward")
+            ser.write('1')
         elif (x-img.shape[0]/2 > 0):
-            print("Right")
+            ser.write('3')
         else:
-            print("Left")
+            ser.write('2')
 
-    cv2.imshow('testing', img)
+    #cv2.imshow('testing', img)
     if ranThrough:
         diff = cv2.subtract(img,prev)
  #       cv2.imshow('Diff',diff)
