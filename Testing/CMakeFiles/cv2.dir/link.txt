@@ -1,0 +1,2 @@
+/usr/bin/ar cr libcv2.a  CMakeFiles/cv2.dir/cv2.cpp.o
+/usr/bin/ranlib libcv2.a

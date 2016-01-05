@@ -1,0 +1,2 @@
+/usr/bin/ar cr libImgFunctionDefs.a  CMakeFiles/ImgFunctionDefs.dir/ImageFunction.cpp.o
+/usr/bin/ranlib libImgFunctionDefs.a

@@ -1,0 +1,3 @@
+/home/daniel/DroneProject/Testing/CMakeFiles/ImgFunctionDefs.dir
+/home/daniel/DroneProject/Testing/CMakeFiles/ImgProc.dir
+/home/daniel/DroneProject/Testing/CMakeFiles/cv2.dir

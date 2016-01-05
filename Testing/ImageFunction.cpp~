@@ -1,0 +1,14 @@
+#include "ImageFunction.h"
+
+char const* greet() {
+  return "hello, world";
+}
+
+void printStr (std::string stuff) {
+  std::cout << stuff << std::endl;
+}
+
+void testing(PyObject* stuff) {
+  std::cout << stuff << std::endl;
+
+}
