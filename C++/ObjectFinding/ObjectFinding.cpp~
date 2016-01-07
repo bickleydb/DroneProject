@@ -1,0 +1,82 @@
+#include <string>
+#include <vector>
+#include <iostream>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/opencv.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/objdetect/objdetect.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include "opencv2/opencv_modules.hpp"
+#include <opencv2/features2d/features2d.hpp>
+
+using namespace cv;
+using namespace std;
+
+Mat preProcess(Mat& frame) {
+  cvtColor(frame,frame,CV_BGR2GRAY);
+  GaussianBlur(frame,frame,Size(9,9),0,0);
+  Canny(frame,frame,50,100);
+  return frame;
+}
+
+
+
+Mat getContours(Mat& frame) {
+   preProcess(frame);
+   std::vector<std::vector<Point> > contours;
+   findContours(frame,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
+   drawContours(frame,contours,-1,Scalar(1000),20);
+   bitwise_not(frame,frame);
+   return frame;
+}
+
+Mat removeNonContours(Mat& frame) {
+  Mat rtn;
+  
+  Mat colors[3];
+  split(frame,colors);
+  Mat mask = getContours(frame);
+  for(int i = 0; i < 3; i++) {
+    frame.copyTo(colors[i],mask);
+  }
+  merge(colors,3,rtn);
+  return rtn;
+}
+
+
+void showImage(std::string name, Mat& frame) {
+  RNG rng(123421);
+  frame = preProcess(frame);
+  for(;;) {
+    Mat drawing = Mat::zeros(frame.size(), CV_8UC3);
+
+   std::vector<std::vector<Point> > contours;
+   findContours(frame,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_NONE);
+   for(int i = 0; i < contours.size(); i++) {
+     Scalar color = Scalar(rng.uniform(0,255),rng.uniform(0,255),rng.uniform(0,255));
+     drawContours(drawing,contours,i,color,1);
+     imshow("",drawing);
+     waitKey(60);
+   }
+    char(c) = waitKey(1000);
+    if(c == 27) {
+      break;
+    } 
+  }
+  imwrite("Test.bmp",frame);
+}
+
+int main() {
+ Mat img = imread("17foot_LeftBox.png");
+ resize(img,img,Size(1000,1080));
+ img = removeNonContours(img);
+ showImage("",img);
+ std::cout << "A" << std::endl;
+
+
+
+}
+
+
+
