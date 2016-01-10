@@ -27,6 +27,7 @@
 #define FOCAL_LENGTH 216.79
 #define FM 667.88
 #define FB 257.00
+#define PI 3.141592653589793238462643383279502884197169399375105820974944592307816406286 
 
 using namespace std;
 using namespace cv;
@@ -191,15 +192,20 @@ std::vector<KeyPoint> findPaper(Mat& frame) {
 
 
 Point getLaserLocation(Mat& frame) {
+  // cvtColor(frame,frame,CV_GRAY2BGR);
   //showImage(frame);
   for(int i = 0; i < frame.rows; i++) {
     for(int t = 0; t < frame.cols; t++) {
-      if(frame.at<unsigned char>(i,t) != 0) {
-	frame.at<Vec3b>(i,t)[0] = 255;
-	frame.at<Vec3b>(i,t)[1] = 255;
-      std:cout << i << "," << t << std::endl;
-	showImage(frame);
-	return Point(i,t);
+        if(frame.at<unsigned char>(i,t) != 0) {	 
+	  showImage(frame);
+          std:cout << i << "," << t << std::endl;
+	  //ellipse(frame, Point(i,t),Size(2,2),0,0,360,Scalar(100),20);
+	//showImage(frame);
+	  return Point(i,t);
+	} else {
+	  frame.at<Vec3b>(i,t)[0] = 255;
+	  frame.at<Vec3b>(i,t)[1] = 255;
+	  frame.at<Vec3b>(i,t)[2] = 0;
       }
     }
   }
@@ -218,8 +224,8 @@ void showImage(Mat img) {
 Mat getDiff (Mat first, Mat second) {
   cvtColor(first,first,CV_BGR2GRAY);
     cvtColor(second,second,CV_BGR2GRAY);
-    GaussianBlur(first,first,Size(7,7),0);
-    GaussianBlur(second,second,Size(7,7),0);
+    GaussianBlur(first,first,Size(3,3),0);
+    GaussianBlur(second,second,Size(3,3),0);
 
   //Rect roi = Rect(first.rows/2-10,0,20,first.rows-1);
   //first = first(roi);
@@ -227,11 +233,11 @@ Mat getDiff (Mat first, Mat second) {
   Mat rtn = abs(first-second);
   double maxVal = 0;
   double minVal = 0;
-  minMaxLoc(rtn,&minVal,&maxVal);
-  threshold(rtn,rtn,maxVal-10,255,0);
+  // minMaxLoc(rtn,&minVal,&maxVal);
+  //threshold(rtn,rtn,maxVal-10,255,0);
 
-   Rect roi = Rect(first.rows/2+300,0,100,first.rows-1);
-   rtn = rtn(roi);
+  //Rect roi = Rect(first.rows/2+300,0,100,first.rows-1);
+  //rtn = rtn(roi);
   return rtn;
 }
 
@@ -242,9 +248,49 @@ double calcDistance(double yCoor) {
   double denom = yCoor - FM;
   z = z / denom;
 
-  return (FM*z+FB)/z;
+  return z;
 
  
+}
+
+Point2f determineLaserPoint(std::vector<std::vector<Point> > pts) {
+  Point2f bestPt;
+  double bestRad = 1000;
+  for(int i = 0; i < pts.size(); i++) {
+    std::vector<Point> cur = pts[i];
+    Point2f curPoint;
+    float curRad;
+    minEnclosingCircle(cur,curPoint,curRad);
+    if(curRad < bestRad) {
+      bestPt = curPoint;
+      bestRad = curRad;
+    }
+  }
+  return bestPt;
+}
+
+std::vector<std::vector<Point> > findCircleContours (Mat& image) {
+  std::vector<std::vector<Point> > contours;
+  Canny(image,image,50,150);
+  std::vector<std::vector<Point> > approxConts;
+  std::vector<std::vector<Point> > circles;
+  findContours(image,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
+
+  for(int i = 0; i < contours.size(); i++) {
+    std::vector<Point> cont = contours[i];
+    double perimeter = arcLength(cont,true);
+    Point2f center;
+    float rad = 0;
+    std::vector<Point> approx;
+    approxPolyDP(cont,approx,1,true);
+    minEnclosingCircle(approx,center,rad);
+    double contArea = contourArea(approx,false);
+
+    if(PI*rad*rad <= 1.5*contArea) {
+      circles.push_back(approx);
+    }
+  }
+  return circles;
 }
 
 
@@ -255,12 +301,13 @@ int main() {
     Mat laser = imread("15Feet.png");
     Mat noLaser = imread("15FeetLaser.png");
     Mat diff = getDiff(laser,noLaser);
-    Point pt = getLaserLocation(diff);
-    std::cout << calcDistance(pt.x) << std::endl;
-    std::vector<KeyPoint> paper = findPaper(laser);
-    double widthPixels =  getPerim(paper);
-    double distance = calculateDistance(widthPixels,8.6);
-    drawKeypoints(laser,paper,laser);
+    //std::cout << determineLaserPoint(findCircleContours(diff)) << std::endl;
+    Point pt = determineLaserPoint(findCircleContours(diff));
+    std::cout << "DIST " << calcDistance(pt.y) << std::endl;
+    //    std::vector<KeyPoint> paper = findPaper(laser);
+    //double widthPixels =  getPerim(paper);
+    //double distance = calculateDistance(widthPixels,8.6);
+    //drawKeypoints(laser,paper,laser);*/
 
   return 0;
 }

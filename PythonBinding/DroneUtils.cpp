@@ -10,7 +10,7 @@ using namespace cv;
 using namespace std;
 
 
-std::vector<KeyPoint> findPaper (Mat frame, double avgBright) {
+std::vector<KeyPoint> findPaperCornerBased (Mat frame, double avgBright) {
 
   //This stuff is setting up the images by
   //    Saving the HSV version of the image
@@ -179,8 +179,15 @@ double getWidth(std::vector<KeyPoint> paper) {
   double dist3 = std::sqrt(std::pow(paper[0].pt.x - paper[3].pt.x,2) + std::pow(paper[0].pt.y - paper[3].pt.y,2));
   double width = std::min(dist1, std::min(dist2,dist3));
   return width;
+}
 
-
+double getWidth(std::vector<Point> paper) {
+  assert(paper.size() == 4);
+   double dist1 = std::sqrt(std::pow(paper[0].x - paper[1].x,2) + std::pow(paper[0].y - paper[1].y,2));
+  double dist2 = std::sqrt(std::pow(paper[0].x - paper[2].x,2) + std::pow(paper[0].y - paper[2].y,2));
+  double dist3 = std::sqrt(std::pow(paper[0].x - paper[3].x,2) + std::pow(paper[0].y - paper[3].y,2));
+  double width = std::min(dist1, std::min(dist2,dist3));
+  return width;
 }
 
 //Uses the fomulas Dr. Leonard gave us to determine a distance estimation
@@ -215,18 +222,82 @@ The char* parameter is the actual data of the Numpy Array that is given.
 The width and height are pretty self explanitory, but I'll describe it in
 more detail in the ImageProcessing.py file
  */
-double getPaperDist(char * img, int width, int height) {
+double getPaperDistByCorner(char * img, int width, int height) {
    cv::Mat image(cv::Size(width,height),CV_8UC3,img,cv::Mat::AUTO_STEP);
    std::vector<Mat> hsv;
    hsvSplit(image,hsv);
    double avgBright = getAverageBright(hsv);
-   std::vector<KeyPoint> paper = findPaper(image,avgBright);
+   std::vector<KeyPoint> paper = findPaperCornerBased(image,avgBright);
    double widthInPix = getWidth(paper);
    double distance = calculateDistance(widthInPix,PAPER_WIDTH);
    return distance;
+}
 
+std::vector<Point> pickBiggestPaper(std::vector<std::vector<Point> > possibles) {
+  double bestArea = -1;
+  std::vector<Point> bestVect;
+  for(int i = 0; i < possibles.size(); i++) {
+    double area = contourArea(possibles[i]);
+    if(area > bestArea) {
+      bestArea = area;
+      bestVect = possibles[i];
+    }
+  }
+  return bestVect;
+}
+
+std::vector<std::vector<Point> > getPaperShapedContours(std::vector<std::vector<Point> > contours, double ar) {
+  std::vector<std::vector<Point> > rtn;
+  for(int i = 0; i < contours.size(); i++) {
+    std::vector<Point> cur =  contours[i];
+    approxPolyDP(cur,cur,10,true);
+    if(cur.size() >= 4) {
+      Rect rectSize = boundingRect(cur);
+      double aspectRatio = ((double)rectSize.width)/rectSize.height;
+      if(abs(abs(aspectRatio)-abs(ar)) < 0.01) {
+	rtn.push_back(cur);
+      }
+    }
+  }
+  
+  return rtn;
+}
+
+std::vector<Point> getPaperContour(Mat& img) {
+  GaussianBlur(img,img,Size(7,7),0,0);
+  cvtColor(img,img,CV_BGR2GRAY);
+  Canny(img,img,50,150);
+  std::vector<std::vector<Point> > contours;
+  findContours(img,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_NONE);
+  contours = getPaperShapedContours(contours,PAPER_AR);
+  std::vector<Point> paper = pickBiggestPaper(contours);
+  return paper;
+}
+
+boost::python::list  paperContour(char* img, int width, int height) {
+  cv::Mat image(cv::Size(width,height),CV_8UC3,img,cv::Mat::AUTO_STEP);
+  std::vector<Point> paper = getPaperContour(image);
+  int paperPoints[2*paper.size()];
+  int paperIndex = 0;
+ 
+  boost::python::list list;
+  for(int i = 0; i < paper.size(); i++) {
+    list.append(paper[i].x);
+    list.append(paper[i].y);
+  }
+  return list;
 
 }
+
+double getPaperDistContour(char * img, int width, int height) {
+  cv::Mat image(cv::Size(width,height),CV_8UC3,img,cv::Mat::AUTO_STEP);
+  std::vector<Point> paper = getPaperContour(image);
+  double paperWidth = getWidth(paper);
+  double distance = calculateDistance(paperWidth,PAPER_WIDTH);
+  return distance;
+}
+
+
 
 //Returns the average brightness of an image, assuming that
 //the image is divided into a vector of Mats, where each
@@ -245,5 +316,8 @@ double getAverageBright(std::vector<cv::Mat> const img) {
 BOOST_PYTHON_MODULE(DroneUtils) {
   using namespace boost::python;
   def("displayImage",displayImage);
-  def("getPaperDist",getPaperDist);
+  // def("getPaperDist",getPaperDist);
+  def("getPaperContour",getPaperContour);
+  def("getPaperDistContour", getPaperDistContour);
+  def("paperContour",paperContour);
 }

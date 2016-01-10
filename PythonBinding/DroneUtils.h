@@ -2,6 +2,7 @@
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
+#include <boost/numpy.hpp>
 #include "opencv2/core.hpp"
 #include "opencv2/core/utility.hpp"
 #include "opencv2/core/persistence.hpp"
@@ -33,9 +34,12 @@
 #define LOW_RED 0
 #define HIGH_RED 5
 #define FOCAL_LENGTH 216.79
+#define PAPER_AR 8.5/11.0
 
 using namespace cv;
 using namespace std;
+using namespace boost::numpy;
+
 void displayImage(char* img, int width, int height);
 double getPaperDist(char * img, int width, int height);
 double getAverageBright(std::vector<Mat> const img);

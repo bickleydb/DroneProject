@@ -25,10 +25,22 @@
 #define LOW_RED  0
 #define HIGH_RED  5
 #define FOCAL_LENGTH 216.79
+#define PAPER_AR 8.5/11.0
+#define BOX_AR 22.5/44.5
 
 using namespace std;
 using namespace cv;
 using namespace cv::xfeatures2d;
+
+
+void showImage(Mat img) {
+  for(;;) {
+    imshow("Stuff",img);
+    char c = waitKey(1);
+    if(c == 27) {break;}
+  }
+  imwrite("stuff.png",img);
+}
 
 std::vector<KeyPoint> generateNeighbors(KeyPoint pt, unsigned int rows, unsigned int cols,double offset) {
   
@@ -165,41 +177,114 @@ double calculateDistance(double width, double inchWidth) {
 
 }
 
+std::vector<std::vector<Point> > getPaperShapedContours(std::vector<std::vector<Point> > contours, double ar) {
+  std::vector<std::vector<Point> > rtn;
+  for(int i = 0; i < contours.size(); i++) {
+    std::vector<Point> cur =  contours[i];
+    approxPolyDP(cur,cur,10,true);
+    if(cur.size() >= 4) {
+      Rect rectSize = boundingRect(cur);
+      double aspectRatio = ((double)rectSize.width)/rectSize.height;
+      if(abs(abs(aspectRatio)-abs(ar)) < 0.01) {
+	rtn.push_back(cur);
+      }
+    }
+  }
+  
+  return rtn;
+}
+
+std::vector<Point> pickBiggestPaper(std::vector<std::vector<Point> > possibles) {
+  double bestArea = -1;
+  std::vector<Point> bestVect;
+  for(int i = 0; i < possibles.size(); i++) {
+    double area = contourArea(possibles[i]);
+    if(area > bestArea) {
+      bestArea = area;
+      bestVect = possibles[i];
+    }
+  }
+  return bestVect;
+}
+
+double getWidth(std::vector<Point> paper) {
+  if(paper.size() != 4) {
+    return -1;
+  }
+   double dist1 = std::sqrt(std::pow(paper[0].x - paper[1].x,2) + std::pow(paper[0].y - paper[1].y,2));
+  double dist2 = std::sqrt(std::pow(paper[0].x - paper[2].x,2) + std::pow(paper[0].y - paper[2].y,2));
+  double dist3 = std::sqrt(std::pow(paper[0].x - paper[3].x,2) + std::pow(paper[0].y - paper[3].y,2));
+  double width = std::min(dist1, std::min(dist2,dist3));
+  return width;
+}
+
+std::vector<Point> getPaperContour(Mat& img) {
+  GaussianBlur(img,img,Size(7,7),0,0);
+  cvtColor(img,img,CV_BGR2GRAY);
+  Canny(img,img,50,150);
+  std::vector<std::vector<Point> > contours;
+  findContours(img,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_NONE);
+  contours = getPaperShapedContours(contours,PAPER_AR);
+  std::vector<Point> paper = pickBiggestPaper(contours);
+  return paper;
+}
+
+std::pair<double,double> getRotatedRectVals(RotatedRect r) {
+  Point2f paper[4];
+  r.points(paper);
+  double dist1 = std::sqrt(std::pow(paper[0].x - paper[1].x,2) + std::pow(paper[0].y - paper[1].y,2));
+  double dist2 = std::sqrt(std::pow(paper[0].x - paper[2].x,2) + std::pow(paper[0].y - paper[2].y,2));
+  double dist3 = std::sqrt(std::pow(paper[0].x - paper[3].x,2) + std::pow(paper[0].y - paper[3].y,2));
+  double width = std::min(dist1, std::min(dist2,dist3));
+  double height = dist1+dist2+dist3-width-std::max(std::max(dist1,dist2),dist3);
+  return std::pair<double,double> (width,height);
+
+
+}
+
+std::vector<std::vector<Point> > getBoxyContours(std::vector<std::vector<Point> > conts) {
+  std::vector<std::vector<Point> > rtn;
+  for(int i = 0; i < conts.size(); i++) {
+    std::vector<Point> approx;
+    approxPolyDP(conts[i],approx,10,true);
+    if(approx.size() >= 10 && approx.size() <= 22) {
+      RotatedRect rect = minAreaRect(approx);
+      std::pair<double,double> rectInfo = getRotatedRectVals(rect);
+      double ar = rectInfo.first/rectInfo.second;
+      double ar2 = rectInfo.second/rectInfo.first;
+      if(abs(abs(BOX_AR)-abs(ar)) < 1 || abs(abs(BOX_AR)-abs(ar2)) < 1   ) {
+	rtn.push_back(approx);
+      }
+    }
+  }
+  return rtn;
+}
+
+
+
+
+
+void getBoxContour(Mat& img) {
+  GaussianBlur(img,img,Size(7,7),0,0);
+  cvtColor(img,img,CV_BGR2GRAY);
+  Canny(img,img,2,15);
+  std::vector<std::vector<Point> > contours;
+  findContours(img,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_NONE);
+  contours = getBoxyContours(contours);
+  drawContours(img,contours,-1,Scalar(255),30);
+  showImage(img);
+
+
+
+
+}
+
 int main() {
-    Mat frame = imread("15FeetLaser.png");
-    Mat hsv[3];
-    cvtColor(frame,frame,CV_BGR2HSV);
-    split(frame,hsv);
-    cvtColor(frame,frame,CV_HSV2BGR);
+    Mat frame = imread("17foot_RightBox.png");
+    getBoxContour(frame);
+    /*std::vector<Point> paper = getPaperContour(frame);
+    double widthPixels =  getWidth(paper);
+    double distance = calculateDistance(widthPixels,8.5);
+    std::cout << distance << std::endl;*/
 
-    double avgBright = 0;
-    double stdDevBright = 0;
-    double avgSat = 0;
-    double stdDevSat = 0;
-    Scalar avg;
-    Scalar stdDev;
-    meanStdDev(hsv[2],avg,stdDev);
-    avgBright = avg[0];
-    stdDevBright = stdDev[0];
-    meanStdDev(hsv[1],avg,stdDev);
-    avgSat = avg[0];
-    stdDevSat = stdDev[0];
-    ;
-    std::vector<KeyPoint> paper = findPaper(frame,avgBright);
-    double widthPixels =  getPerim(paper);
-
-    double distance = calculateDistance(widthPixels,8.6);
-    std::cout << distance << std::endl;
-    drawKeypoints(frame,paper,frame);
-   
-    for(;;) {
-       imshow("Stuff",frame);
-      imwrite("Test.bmp",frame);
- 
-
-      char c = (char)waitKey(1);
-       if(c == 27) break;
-
-       }
-  return 0;
 }
