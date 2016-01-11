@@ -309,6 +309,87 @@ double getAverageBright(std::vector<cv::Mat> const img) {
   return averageBright[0];
 }
 
+Mat getDiff (Mat first, Mat second) {
+  cvtColor(first,first,CV_BGR2GRAY);
+  cvtColor(second,second,CV_BGR2GRAY);
+  GaussianBlur(first,first,Size(3,3),0);
+  GaussianBlur(second,second,Size(3,3),0);
+  Mat rtn = abs(first-second);
+  return rtn;
+}
+
+Point2f determineLaserPoint(std::vector<std::vector<Point> > pts) {
+  Point2f bestPt;
+  double bestRad = 1000;
+  for(int i = 0; i < pts.size(); i++) {
+    std::vector<Point> cur = pts[i];
+    Point2f curPoint;
+    float curRad;
+    minEnclosingCircle(cur,curPoint,curRad);
+    if(curRad < bestRad) {
+      bestPt = curPoint;
+      bestRad = curRad;
+    }
+  }
+  return bestPt;
+}
+
+std::vector<std::vector<Point> > findCircleContours (Mat& image) {
+  std::vector<std::vector<Point> > contours;
+  Canny(image,image,50,150);
+  std::vector<std::vector<Point> > approxConts;
+  std::vector<std::vector<Point> > circles;
+  findContours(image,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
+
+  for(int i = 0; i < contours.size(); i++) {
+    std::vector<Point> cont = contours[i];
+    double perimeter = arcLength(cont,true);
+    Point2f center;
+    float rad = 0;
+    std::vector<Point> approx;
+    approxPolyDP(cont,approx,1,true);
+    minEnclosingCircle(approx,center,rad);
+    double contArea = contourArea(approx,false);
+
+    if(PI*rad*rad <= 1.5*contArea) {
+      circles.push_back(approx);
+    }
+  }
+  return circles;
+}
+
+boost::python::list getLaserLocation (char * img1, char * img2, int width, int height) {
+ cv::Mat image1(cv::Size(width,height),CV_8UC3,img1,cv::Mat::AUTO_STEP);
+ cv::Mat image2(cv::Size(width,height),CV_8UC3,img2,cv::Mat::AUTO_STEP);
+ cv::Mat diff = getDiff(image1,image2);
+ std::vector<std::vector<Point> > contours = findCircleContours(diff);
+ Point pt = determineLaserPoint(contours);
+ boost::python::list list;
+ list.append(pt.x);
+ list.append(pt.y);
+ return list;
+}
+
+double calcDistance(double yCoor) {
+ 
+  double z = FB;
+  double denom = yCoor - FM;
+  z = z / denom;
+
+  return z;
+
+ 
+}
+
+double getLaserDist (char * img1, char* img2, int width, int height) {
+ cv::Mat image1(cv::Size(width,height),CV_8UC3,img1,cv::Mat::AUTO_STEP);
+ cv::Mat image2(cv::Size(width,height),CV_8UC3,img2,cv::Mat::AUTO_STEP);
+ cv::Mat diff = getDiff(image1,image2);
+ std::vector<std::vector<Point> > contours = findCircleContours(diff);
+ Point pt = determineLaserPoint(contours);
+ return calcDistance(pt.x);
+}
+
 
 
 //This part is what Python can see
@@ -316,7 +397,8 @@ double getAverageBright(std::vector<cv::Mat> const img) {
 BOOST_PYTHON_MODULE(DroneUtils) {
   using namespace boost::python;
   def("displayImage",displayImage);
-  // def("getPaperDist",getPaperDist);
+  def("getLaserLocation",getLaserLocation);
+  def("getLaserDist",getLaserDist);
   def("getPaperContour",getPaperContour);
   def("getPaperDistContour", getPaperDistContour);
   def("paperContour",paperContour);

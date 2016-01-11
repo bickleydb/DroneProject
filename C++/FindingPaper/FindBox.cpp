@@ -17,7 +17,6 @@
 #include "opencv2/features2d.hpp"
 #include "opencv2/calib3d.hpp"
 #include "opencv2/imgproc.hpp"
-#include "opencv2/xfeatures2d.hpp"
 #include <chrono>
 #include <random>
 #include <algorithm>
@@ -31,7 +30,7 @@
 
 using namespace std;
 using namespace cv;
-using namespace cv::xfeatures2d;
+
 
 void showImage(Mat img);
 
@@ -300,10 +299,10 @@ std::vector<std::vector<Point> > findCircleContours (Mat& image) {
 int main() {
     Mat laser = imread("15Feet.png");
     Mat noLaser = imread("15FeetLaser.png");
-    Mat diff = getDiff(laser,noLaser);
+    //  Mat diff = getDiff(laser,noLaser);
     //std::cout << determineLaserPoint(findCircleContours(diff)) << std::endl;
-    Point pt = determineLaserPoint(findCircleContours(diff));
-    std::cout << "DIST " << calcDistance(pt.y) << std::endl;
+    Point pt = determineLaserPoint(findCircleContours(noLaser));
+    std::cout << pt << std::endl;
     //    std::vector<KeyPoint> paper = findPaper(laser);
     //double widthPixels =  getPerim(paper);
     //double distance = calculateDistance(widthPixels,8.6);
