@@ -233,6 +233,21 @@ double getPaperDistByCorner(char * img, int width, int height) {
    return distance;
 }
 
+boost::python::list getPaperByCorner(char * img, int width, int height) {
+   cv::Mat image(cv::Size(width,height),CV_8UC3,img,cv::Mat::AUTO_STEP);
+   std::vector<Mat> hsv;
+   hsvSplit(image,hsv);
+   double avgBright = getAverageBright(hsv);
+   std::vector<KeyPoint> paper = findPaperCornerBased(image,avgBright);
+   boost::python::list rtn;
+   for(int i = 0; i < paper.size(); i++) {
+     rtn.append(paper[i].pt.x);
+     rtn.append(paper[i].pt.y);
+   }
+   return rtn;
+}
+
+
 std::vector<Point> pickBiggestPaper(std::vector<std::vector<Point> > possibles) {
   double bestArea = -1;
   std::vector<Point> bestVect;
@@ -401,5 +416,7 @@ BOOST_PYTHON_MODULE(DroneUtils) {
   def("getLaserDist",getLaserDist);
   def("getPaperContour",getPaperContour);
   def("getPaperDistContour", getPaperDistContour);
+  def("getPaperDistByCorner",getPaperDistByCorner);
+  def("getPaperByCorner",getPaperByCorner);
   def("paperContour",paperContour);
 }
