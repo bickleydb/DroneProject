@@ -9,7 +9,6 @@
 using namespace cv;
 using namespace std;
 
-
 std::vector<KeyPoint> findPaperCornerBased (Mat frame, double avgBright) {
 
   //This stuff is setting up the images by
@@ -402,7 +401,7 @@ double getLaserDist (char * img1, char* img2, int width, int height) {
  cv::Mat diff = getDiff(image1,image2);
  std::vector<std::vector<Point> > contours = findCircleContours(diff);
  Point pt = determineLaserPoint(contours);
- return calcDistance(pt.x);
+ return calcDistance(pt.y);
 }
 
 
