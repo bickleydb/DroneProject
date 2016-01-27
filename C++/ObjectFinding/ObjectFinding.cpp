@@ -17,7 +17,7 @@ Mat preProcess(Mat const frame) {
   Mat operateOn;
   cvtColor(frame,operateOn,CV_BGR2GRAY);
   GaussianBlur(operateOn,operateOn,Size(7,7),0,0);
-  // Canny(frame,frame,100,200);
+  Canny(operateOn,operateOn,10,20);
   return operateOn;
 }
 
@@ -109,14 +109,13 @@ std::vector<KeyPoint> filter (Mat const img, Scalar const Color, std::vector<Key
 
 int main() {
  Mat img = imread("17foot_LeftBox.png");
- resize(img,img,Size(1000,1080));
- std::vector<KeyPoint> pts = getKeyPoints(img);
- std::vector<KeyPoint> filtered = filter(img,Scalar(2),pts);
- drawKeypoints(img,filtered,img);
- // img = removeNonContours(img);
+ Mat other = preProcess(img);
+ std::vector<KeyPoint>  pts;
+ FAST(other,pts,30);
+ // cvtColor(img,img,CV_GRAY2BGR);
+ drawKeypoints(img,pts,img);
+ resize(img,1000,1000);
  showImage("",img);
- //std::cout << "A" << std::endl;
-
 
 
 }

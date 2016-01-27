@@ -27,7 +27,6 @@
 #define FM 667.88
 #define FB 257.00
 #define PI 3.141592653589793238462643383279502884197169399375105820974944592307816406286 
-#define BOX_AR 44.5/22.5
 
 using namespace std;
 using namespace cv;
@@ -36,6 +35,10 @@ using namespace cv;
 void showImage(Mat img);
 
 std::vector<KeyPoint> generateNeighbors(KeyPoint pt, unsigned int rows, unsigned int cols,double offset) {
+  
+
+
+
 }
 
 std::vector<KeyPoint> findPaper (Mat frame, double avgBright) {
@@ -239,11 +242,11 @@ Mat getDiff (Mat first, Mat second) {
 
 
 double calcDistance(double yCoor) {
+ 
   double z = FB;
-  std::cout << z << std::endl;
-  double denom = (yCoor - FM);
-  std::cout << denom << std::endl;
+  double denom = yCoor - FM;
   z = z / denom;
+
   return z;
 
  
@@ -289,118 +292,21 @@ std::vector<std::vector<Point> > findCircleContours (Mat& image) {
   return circles;
 }
 
-Mat valThresholding(Mat val) {
-  Mat cpy;
-  threshold(val,cpy,90,255,3);
-  //showImage(cpy);
-  threshold(cpy,cpy,150,255,4);
-  //showImage(cpy);
-  threshold(cpy,cpy,1,255,0);
-  //showImage(cpy);
-  return cpy;
-}
 
-Mat hueThresholding(Mat hue) {
-  Mat cpy;
-  threshold(hue,cpy,100,255,4);
-  showImage(cpy);
-  threshold(cpy,cpy,1,255,0);
-  showImage(cpy);
 
-  return cpy;
-}
 
-Mat satThresholding(Mat sat) {
-  Mat cpy;
-  threshold(sat,cpy,55,255,3);
-  threshold(cpy,cpy,150,255,4);
-  threshold(cpy,cpy,1,255,0);
-  return cpy;
-}
-
-Mat filterOutNonBox(Mat box) {
-  GaussianBlur(box,box,Size(7,7),0);
-  Mat hsvImg;
-  cvtColor(box,hsvImg,CV_BGR2HSV);
-  Mat hsv[3];
-  split(hsvImg,hsv);
-  Mat maskH = hueThresholding(hsv[0]);
-  Mat maskV = valThresholding(hsv[2]);
-  Mat maskS = satThresholding(hsv[1]);
-  Mat mask;
-  bitwise_and(maskH,maskV,mask);
-  bitwise_and(mask,maskS,mask);
-  //showImage(mask);
-  Mat rtn;
-  hsv[2].copyTo(rtn,mask);
-  // showImage(rtn);
-  return rtn;
-}
-
-std::vector<std::vector<Point> > filterBasedOnArea(std::vector<std::vector<Point> > contours) {
-  std::vector<std::vector<Point> > rtn;
-  for(int i = 0; i < contours.size(); i++) {
-    std::vector<Point> approx;
-    approxPolyDP(contours[i],approx,5,true);
-    Rect test = boundingRect(approx);
-    if(test.area() > 10000) {
-      rtn.push_back(approx);
-    }
-  }
-  return rtn;
-}
-
-std::vector<Rect> determineBoxes(std::vector<std::vector<Point>> contours) {
-  std::vector<Rect> rtn;
-  for(int i = 0; i < contours.size(); i++) {
-    Rect possible = boundingRect(contours[i]);
-    int width = possible.width;
-    int height = possible.height;
-    double larger = (double) std::max(width,height);
-    double smaller = (double) std::min(width,height);
-    if(larger/smaller < BOX_AR + 0.5 && larger/smaller > BOX_AR - 0.5) {
-      rtn.push_back(possible);
-    }
-  }
-  return rtn;
-}
 
 int main() {
-  std::string imgName = "17foot_LeftBox.png";
-  Mat box = imread(imgName);
-  Mat boxCpy = imread(imgName);
-  RNG rng(12345);
-  box = filterOutNonBox(box);
-  Canny(box,box,50,100);
-  // showImage(box);
-  std::vector<std::vector<Point> > contours;
-  findContours(box,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
-  drawContours(boxCpy,contours,-1,Scalar(255,0,0),2);
-  showImage(box);
-  contours = filterBasedOnArea(contours);
-  
-  std::vector<Rect> boxes = determineBoxes(contours);
-  for(int i = 0; i < boxes.size(); i++) {
-    rectangle(boxCpy,boxes[i],Scalar(0,255,0),5);
-  }
-  Mat show;
-  resize(boxCpy,show,Size(1000,1000));
-  GaussianBlur(show,show,Size(271,271),0);
-  showImage(show);
-  /*Mat laser = imread("15Feet.png");
-  Mat noLaser = imread("15FeetLaser.png");
-  Mat diff = getDiff(laser,noLaser);
-  Point laserDot =  determineLaserPoint(findCircleContours(diff));
-  Point pt(std::abs((laser.cols/2) - laserDot.x), std::abs((laser.rows/2)-laserDot.y));
-  std::cout << pt << std::endl;
-  std::cout << calcDistance(laserDot.y) << std::endl;
-  
-    /*Point pt = determineLaserPoint(findCircleContours(noLaser));
+    Mat laser = imread("15Feet.png");
+    Mat noLaser = imread("15FeetLaser.png");
+    //  Mat diff = getDiff(laser,noLaser);
+    //std::cout << determineLaserPoint(findCircleContours(diff)) << std::endl;
+    Point pt = determineLaserPoint(findCircleContours(noLaser));
     std::cout << pt << std::endl;
-    std::vector<KeyPoint> paper = findPaper(laser);
-    double widthPixels =  getPerim(paper);
-    double distance = calculateDistance(widthPixels,8.6);
-    drawKeypoints(laser,paper,laser);*/
+    //    std::vector<KeyPoint> paper = findPaper(laser);
+    //double widthPixels =  getPerim(paper);
+    //double distance = calculateDistance(widthPixels,8.6);
+    //drawKeypoints(laser,paper,laser);*/
 
   return 0;
 }

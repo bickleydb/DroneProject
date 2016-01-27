@@ -384,6 +384,99 @@ boost::python::list getLaserLocation (char * img1, char * img2, int width, int h
  return list;
 }
 
+Mat valThresholding(Mat& val) {
+  Mat cpy;
+  threshold(val,cpy,90,255,3);
+  threshold(cpy,cpy,150,255,4);
+  threshold(cpy,cpy,1,255,0);
+  return cpy;
+}
+
+Mat hueThresholding(Mat& hue) {
+  Mat cpy;
+  threshold(hue,cpy,15,255,4);
+  threshold(cpy,cpy,1,255,0);
+  return cpy;
+}
+
+Mat satThresholding(Mat& sat) {
+  Mat cpy;
+  threshold(sat,cpy,55,255,3);
+  threshold(cpy,cpy,150,255,4);
+  threshold(cpy,cpy,1,255,0);
+  return cpy;
+}
+
+Mat filterOutNonBox(Mat box) {
+  GaussianBlur(box,box,Size(7,7),0);
+  Mat hsvImg;
+  cvtColor(box,hsvImg,CV_BGR2HSV);
+  Mat hsv[3];
+  split(hsvImg,hsv);
+  Mat maskH = hueThresholding(hsv[0]);
+  Mat maskV = valThresholding(hsv[2]);
+  Mat maskS = satThresholding(hsv[1]);
+  Mat mask;
+  bitwise_and(maskH,maskV,mask);
+  bitwise_and(mask,maskS,mask);
+  Mat rtn;
+  hsv[2].copyTo(rtn,mask);
+  return rtn;
+}
+
+std::vector<std::vector<Point> > filterBasedOnArea(std::vector<std::vector<Point> > contours) {
+  std::vector<std::vector<Point> > rtn;
+  for(int i = 0; i < contours.size(); i++) {
+    std::vector<Point> approx;
+    approxPolyDP(contours[i],approx,5,true);
+    Rect test = boundingRect(approx);
+    if(test.area() > 10000) {
+      rtn.push_back(approx);
+    }
+  }
+  return rtn;
+}
+
+std::vector<Rect> determineBoxes(std::vector<std::vector<Point> > contours) {
+  std::vector<Rect> rtn;
+  for(int i = 0; i < contours.size(); i++) {
+    Rect possible = boundingRect(contours[i]);
+    int width = possible.width;
+    int height = possible.height;
+    double larger = (double) std::max(width,height);
+    double smaller = (double) std::min(width,height);
+    if(larger/smaller < BOX_AR + 0.5 && larger/smaller > BOX_AR - 0.5) {
+      rtn.push_back(possible);
+    }
+  }
+  return rtn;
+}
+
+boost::python::list getBoxes(char * img, int width, int height) {
+  cv::Mat image(cv::Size(width,height),CV_8UC3,img,cv::Mat::AUTO_STEP);
+  image = filterOutNonBox(image);
+  Canny(image,image,50,100);
+  std::vector<std::vector<Point> > contours;
+  findContours(image,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
+  contours = filterBasedOnArea(contours);
+  drawContours(image,contours,-1,Scalar(255),3);
+  resize(image,image,Size(1000,1000));
+  displayImageInner(image);
+  contours = filterBasedOnArea(contours);
+  std::vector<Rect> boxes = determineBoxes(contours);
+  boost::python::list rtn;
+  for(int i = 0; i < boxes.size(); i++) {
+    boost::python::list rect;
+    rect.append(boxes[i].x);
+    rect.append(boxes[i].y);
+    rect.append(boxes[i].width);
+    rect.append(boxes[i].height);
+    rtn.append(rect);
+  }
+  return rtn;
+}
+
+
 double calcDistance(double yCoor) {
  
   double z = FB;
@@ -418,4 +511,5 @@ BOOST_PYTHON_MODULE(DroneUtils) {
   def("getPaperDistByCorner",getPaperDistByCorner);
   def("getPaperByCorner",getPaperByCorner);
   def("paperContour",paperContour);
+  def("getBoxes",getBoxes);
 }
