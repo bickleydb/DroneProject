@@ -60,7 +60,7 @@ def getCurDist():
 	image2 = cv2.imread("img2.png");
 	image = cv2.imread("img1.png");
 
-	dist = DroneUtils.getLaserLocation(image.tostring('c'), image2.tostring('c'), image.shape[1], image.shape[0]);
+	dist = DroneUtils.getLaserDist(image.tostring('c'), image2.tostring('c'), image.shape[1], image.shape[0]);
 	camera.close();
 	cv2.destroyAllWindows();
 	return dist;
