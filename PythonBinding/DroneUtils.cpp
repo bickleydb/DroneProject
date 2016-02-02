@@ -1,3 +1,4 @@
+
 #include <boost/python.hpp>
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1800)
@@ -171,6 +172,7 @@ void displayImageInner(Mat image) {
 
 //It works by finding the distances between the first point and all the other points.
 //The width is going to be the smallest out of the width,height, and diagonal, or else the paper would be rectangular
+//This method takes a vector of KeyPoints, best used with FAST KeyPoint detection and similar algorithms
 double getWidth(std::vector<KeyPoint> paper) {
   assert(paper.size() % 4 == 0);
    double dist1 = std::sqrt(std::pow(paper[0].pt.x - paper[1].pt.x,2) + std::pow(paper[0].pt.y - paper[1].pt.y,2));
@@ -180,6 +182,11 @@ double getWidth(std::vector<KeyPoint> paper) {
   return width;
 }
 
+//This little method gets the width of the piece of paper in pixels.
+
+//It works by finding the distances between the first point and all the other points.
+//The width is going to be the smallest out of the width,height, and diagonal, or else the paper would be rectangular
+//This method takes a vector of Points, best used when working with Contours.
 double getWidth(std::vector<Point> paper) {
   assert(paper.size() == 4);
    double dist1 = std::sqrt(std::pow(paper[0].x - paper[1].x,2) + std::pow(paper[0].y - paper[1].y,2));
@@ -232,6 +239,15 @@ double getPaperDistByCorner(char * img, int width, int height) {
    return distance;
 }
 
+/*
+Uses the color of the white piece of paper and a bright red background to
+find the corner points of the piece of paper. 
+
+It returns the coordinates of the paper in the form
+
+(xCoor,yCoor),(xCoor,yCoor),....
+
+ */
 boost::python::list getPaperByCorner(char * img, int width, int height) {
    cv::Mat image(cv::Size(width,height),CV_8UC3,img,cv::Mat::AUTO_STEP);
    std::vector<Mat> hsv;
@@ -240,14 +256,24 @@ boost::python::list getPaperByCorner(char * img, int width, int height) {
    std::vector<KeyPoint> paper = findPaperCornerBased(image,avgBright);
    boost::python::list rtn;
    for(int i = 0; i < paper.size(); i++) {
-     rtn.append(paper[i].pt.x);
-     rtn.append(paper[i].pt.y);
+     boost::python::list point;
+     point.append(paper[i].pt.x);
+     point.append(paper[i].pt.y);
+     rtn.append(point)
    }
    return rtn;
 }
 
 
-std::vector<Point> pickBiggestPaper(std::vector<std::vector<Point> > possibles) {
+/*
+Filters out possible sheets of paper, based on how large it is. If there is a random contour
+that has a similar AR to a regular sheet of paper, this method picks the largest contour based
+on area, and returns it.
+
+This method is meant for using contours to find the paper, not corner points.
+
+*/
+std::vector<Point> pickBiggestPaper(std::vector<std::vector<Point> >& possibles) {
   double bestArea = -1;
   std::vector<Point> bestVect;
   for(int i = 0; i < possibles.size(); i++) {
@@ -260,6 +286,12 @@ std::vector<Point> pickBiggestPaper(std::vector<std::vector<Point> > possibles) 
   return bestVect;
 }
 
+/*
+Searches through a list  of contours and a given aspect ratio to determine if any of the
+contours follow a similar ar to the parameter. 
+
+Every contour that has the AR we are looking for is returned in a vector.
+ */
 std::vector<std::vector<Point> > getPaperShapedContours(std::vector<std::vector<Point> > contours, double ar) {
   std::vector<std::vector<Point> > rtn;
   for(int i = 0; i < contours.size(); i++) {
@@ -277,17 +309,30 @@ std::vector<std::vector<Point> > getPaperShapedContours(std::vector<std::vector<
   return rtn;
 }
 
+/*
+Gets the largest paperlike contour that is in the image.
+
+Only returns the largest such contour, which could be problematic.
+If you want to get more than one contour, you'll have to change
+what it returns.
+
+ */
 std::vector<Point> getPaperContour(Mat& img) {
-  GaussianBlur(img,img,Size(7,7),0,0);
-  cvtColor(img,img,CV_BGR2GRAY);
-  Canny(img,img,50,150);
+  Mat workOn;
+  GaussianBlur(img,workOn,Size(7,7),0,0);
+  cvtColor(workOn,workOn,CV_BGR2GRAY);
+  Canny(workOn,workOn,50,150);
   std::vector<std::vector<Point> > contours;
-  findContours(img,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_NONE);
+  findContours(workOn,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_NONE);
   contours = getPaperShapedContours(contours,PAPER_AR);
   std::vector<Point> paper = pickBiggestPaper(contours);
   return paper;
 }
 
+/*
+Returns the python representation of the best paperLike contour,
+if one exists.
+ */
 boost::python::list  paperContour(char* img, int width, int height) {
   cv::Mat image(cv::Size(width,height),CV_8UC3,img,cv::Mat::AUTO_STEP);
   std::vector<Point> paper = getPaperContour(image);
@@ -303,6 +348,10 @@ boost::python::list  paperContour(char* img, int width, int height) {
 
 }
 
+/*
+Automatically returns the approximated distance to the sheet of paper
+that is found.
+ */
 double getPaperDistContour(char * img, int width, int height) {
   cv::Mat image(cv::Size(width,height),CV_8UC3,img,cv::Mat::AUTO_STEP);
   std::vector<Point> paper = getPaperContour(image);
@@ -323,16 +372,23 @@ double getAverageBright(std::vector<cv::Mat> const img) {
   return averageBright[0];
 }
 
-Mat getDiff (Mat first, Mat second) {
-  cvtColor(first,first,CV_BGR2GRAY);
-  cvtColor(second,second,CV_BGR2GRAY);
-  GaussianBlur(first,first,Size(3,3),0);
-  GaussianBlur(second,second,Size(3,3),0);
-  Mat rtn = abs(first-second);
+/*
+Returns the bitwise differance of the grayscale versions of two images
+
+Really helpful for finding a laser dot that is present in one image and not
+the other
+*/
+Mat getDiff (Mat& first, Mat& second) {
+  Mat img1,img2;
+  cvtColor(first,img1,CV_BGR2GRAY);
+  cvtColor(second,img2,CV_BGR2GRAY);
+  GaussianBlur(img1,img1,Size(3,3),0);
+  GaussianBlur(img2,img2,Size(3,3),0);
+  Mat rtn = abs(img1-img2);
   return rtn;
 }
 
-Point2f determineLaserPoint(std::vector<std::vector<Point> > pts) {
+Point2f determineLaserPoint(std::vector<std::vector<Point> >& pts) {
   Point2f bestPt;
   double bestRad = 1000;
   for(int i = 0; i < pts.size(); i++) {
@@ -407,24 +463,22 @@ Mat satThresholding(Mat& sat) {
   return cpy;
 }
 
-Mat filterOutNonBox(Mat box) {
-  GaussianBlur(box,box,Size(7,7),0);
-  Mat hsvImg;
-  cvtColor(box,hsvImg,CV_BGR2HSV);
+Mat filterOutNonBox(Mat&  box) {
+  Mat blurred,hsvImg,rtn,mask;
   Mat hsv[3];
+  GaussianBlur(box,blurred,Size(7,7),0);
+  cvtColor(blurred,hsvImg,CV_BGR2HSV);
   split(hsvImg,hsv);
   Mat maskH = hueThresholding(hsv[0]);
   Mat maskV = valThresholding(hsv[2]);
   Mat maskS = satThresholding(hsv[1]);
-  Mat mask;
   bitwise_and(maskH,maskV,mask);
   bitwise_and(mask,maskS,mask);
-  Mat rtn;
   hsv[2].copyTo(rtn,mask);
   return rtn;
 }
 
-std::vector<std::vector<Point> > filterBasedOnArea(std::vector<std::vector<Point> > contours) {
+std::vector<std::vector<Point> > filterBasedOnArea(std::vector<std::vector<Point> >& contours) {
   std::vector<std::vector<Point> > rtn;
   for(int i = 0; i < contours.size(); i++) {
     std::vector<Point> approx;
@@ -437,7 +491,7 @@ std::vector<std::vector<Point> > filterBasedOnArea(std::vector<std::vector<Point
   return rtn;
 }
 
-std::vector<Rect> determineBoxes(std::vector<std::vector<Point> > contours) {
+std::vector<Rect> determineBoxes(std::vector<std::vector<Point> >& contours) {
   std::vector<Rect> rtn;
   for(int i = 0; i < contours.size(); i++) {
     Rect possible = boundingRect(contours[i]);
@@ -478,14 +532,10 @@ boost::python::list getBoxes(char * img, int width, int height) {
 
 
 double calcDistance(double yCoor) {
- 
   double z = FB;
   double denom = yCoor - FM;
   z = z / denom;
-
   return z;
-
- 
 }
 
 double getLaserDist (char * img1, char* img2, int width, int height) {

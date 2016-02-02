@@ -20,6 +20,7 @@
 #include <chrono>
 #include <random>
 #include <algorithm>
+#include <thread>
 
 #define LOW_RED  0
 #define HIGH_RED  5
@@ -207,14 +208,17 @@ Point getLaserLocation(Mat& frame) {
   }
 } 
 
+void showMovie(Mat& img) {
+  imshow("Movie",img);
+}
 
 void showImage(Mat img) {
   for(;;) {
     imshow("Stuff",img);
     char c = waitKey(1);
-    if(c == 27) {break;}
+      if(c == 27) {break;}
   }
-  imwrite("stuff.png",img);
+   imwrite("AlgoOutput.png",img);
 }
 
 Mat getDiff (Mat first, Mat second) {
@@ -358,16 +362,386 @@ std::vector<Rect> determineBoxes(std::vector<std::vector<Point>> contours) {
     int height = possible.height;
     double larger = (double) std::max(width,height);
     double smaller = (double) std::min(width,height);
-    if(larger/smaller < BOX_AR + 0.5 && larger/smaller > BOX_AR - 0.5) {
+    if(larger/smaller < BOX_AR + 0.5 && larger/smaller > BOX_AR - 0.5 && possible.area() > 10000) {
       rtn.push_back(possible);
     }
   }
   return rtn;
 }
 
+void removeRedNotHighest(Mat& img) {
+  for(int i = 0; i < img.rows; i++) {
+    for(int t = 0; t < img.cols; t++) {
+      Vec3b pix = img.at<Vec3b>(i,t);
+      Scalar mean,dev;
+      meanStdDev(pix,mean,dev);
+      if(pix[2] <= mean[0] + dev[0] ) {
+        img.at<Vec3b>(i,t) = Vec3b(0,0,0);
+      }
+
+    }
+
+  }
+
+}
+
+
+
+void removeKeyPoints(Mat& img, std::vector<KeyPoint>& pts) {
+  std::vector<KeyPoint> replace;
+  for(int i = 0; i < pts.size(); i++) {
+    int rowPt = pts[i].pt.x;
+    int colPt = pts[i].pt.y;
+    Vec3b val =  img.at<Vec3b>(rowPt,colPt);
+    if((val[0] == 0 && val[1] == 0 && val[2] == 0) ) {
+      replace.push_back(pts[i]);
+    }
+  }
+  pts = replace;
+} 
+
+void removeHSV(Mat& other, std::vector<KeyPoint>& pts) {
+  Mat img;
+  Mat test[3];
+  other.copyTo(img);
+  showImage(img);
+  cvtColor(img,img,CV_BGR2HSV);
+  split(img,test);
+  equalizeHist(test[0],test[0]);
+  equalizeHist(test[1],test[1]);
+  equalizeHist(test[2],test[2]);
+  merge(test,3,img);
+  std::vector<KeyPoint> keep;
+  for(int i = 0; i < pts.size(); i++) {
+     int rowPt = pts[i].pt.x;
+     int colPt = pts[i].pt.y;
+     Vec3b val =  img.at<Vec3b>(rowPt,colPt);
+     if((val[0] > 10) || val[2] != 0) {
+     } else {
+       std::cout << val << std::endl;
+       keep.push_back(pts[i]);
+     }
+  }
+  std::cout << keep.size() << std::endl;
+  pts = keep;
+}
+
+
+/*std::vector<KeyPoint> findBox (Mat& img, std::vector<KeyPoint> pts) {
+  for (std::vector<KeyPoint>::iterator it = points.begin(); it != points.end(); it++) {
+    KeyPoint pt = *it;
+    Vec3b at = colored.at<Vec3b>(pt.pt);
+    int numBlack; = 0;
+    int numWhite = 0;
+    double dr[8] = { 0, -1,-1, -1, 0,  1, 1, 1};
+    double dc[8] = { 1, 1,  0, -1,-1,-1, 0, 1};
+    std::vector<int> deltaRow (dr, dr+sizeof(dr)/sizeof(int));
+    std::vector<int> deltaCol (dc, dc+sizeof(dc)/sizeof(int));
+    
+    for(unsigned int i = 0; i < deltaRow.size(); i++) {
+      KeyPoint delta = pt;
+      int rowAdd = offset;
+      int colAdd = offset;
+      
+      delta.pt.x = pt.pt.x + (int) (deltaRow[i] * rowAdd);
+      delta.pt.y = pt.pt.y + (int) (deltaCol[i] * colAdd);
+      if(delta.pt.x < 0 || delta.pt.y < 0 || delta.pt.x >= frame.cols || delta.pt.y >= frame.rows) {
+	continue;
+      }
+      int colorCode = 0;
+      Vec3b neighbor = img.at<Vec3b>(delta.pt);
+      
+      if((neighbor[0] <= 10 && neighbor[1] <= 10 && neighbor[2] <= 10) {
+	  numBlack++;
+	colorCode = 1;
+      } else if( neighbor[2] > avgBright) {
+	numWhite++;
+	colorCode = 2;
+      }
+  
+	if(numBlack > 3 ) {
+	  keep[it - points.begin()] = -1;
+    }
+  }
+  }*/
+
+
+void threadDoEveryOther(std::vector<Mat> imgVec) {
+  for(int q = 0; q < imgVec.size(); q++) {
+    Mat img = imgVec[q];
+      for(int t = 0; t < img.cols; t++) {
+	Vec3b at = img.at<Vec3b>(0,t);
+	if(std::abs(at[2]-at[1]) < 20) {
+	  Vec3b newVec(0,0,0);
+	  img.at<Vec3b>(0,t) = newVec;
+	} else if(at[0] > at[1] && at[0] > at[2]) {
+	  Vec3b newVec(0,0,0);
+	  img.at<Vec3b>(0,t) = newVec;
+	} else if(at[1] > at[0] && at[1] > at[2]) {
+	  Vec3b newVec(0,0,0);
+	  img.at<Vec3b>(0,t) = newVec;
+	} else if(at[2] > at[0] && at[2] > at[1]) {
+	  Vec3b newVec(0,0,255);
+	  img.at<Vec3b>(0,t) = newVec;
+	} else {
+	  Vec3b newVec(0,0,0);
+	  img.at<Vec3b>(0,t) = newVec;
+	}
+    } 
+  }
+}
+
+Mat changeToMax (Mat& in) {
+  Mat img;
+  GaussianBlur(in,img,Size(7,7),0);
+  std::vector<Mat> evens;
+  std::vector<Mat> odds;
+  for(int i = 0; i < img.rows; i++) {
+    if(i&2 == 0) {evens.push_back(img.row(i));
+    } else {odds.push_back(img.row(i));}
+  }
+  std::thread first(threadDoEveryOther,evens);
+  std::thread second(threadDoEveryOther,odds);
+  first.join();
+  second.join();
+  return img;
+}
+
+Mat makeMask (Mat& in) {
+  Mat bgr[3];
+  split(in,bgr);
+  return bgr[2];
+}
+
+Mat createHorizontalDelta(Mat& in) {
+  Mat output;
+  in.copyTo(output);
+  for(int i = 0; i < in.rows-1; i++) {
+    for(int t = 0; t < in.cols; t++) {
+      Vec3b cur = in.at<Vec3b>(i,t);
+      Vec3b next = in.at<Vec3b>(i+1,t);
+      Vec3b delta(std::abs(cur[0]-next[0]),std::abs(cur[1]-next[1]),std::abs(cur[2] - next[2]));
+      output.at<Vec3b>(i,t) = delta;
+    }
+  }
+  return output;
+}
+
+Mat createHorizontalDelta1(Mat& in) {
+  Mat output;
+  in.copyTo(output);
+  for(int i = 0; i < in.rows-1; i++) {
+    for(int t = 0; t < in.cols; t++) {
+      unsigned char cur = in.at<unsigned char>(i,t);
+      unsigned char next = in.at<unsigned char>(i+1,t);
+      unsigned char delta(std::abs(cur-next));
+      output.at<unsigned char>(i,t) = delta;
+    }
+  }
+  return output;
+}
+
+
+std::vector<Rect> findBoxes(Mat& in) {
+  Mat preservedColor;
+  Mat redMask, mask,maskedBox,gray;
+  Mat bgr[3];
+  std::vector<std::vector<Point> > contours;
+  in.copyTo(preservedColor);
+  redMask = changeToMax(in);
+  showImage(redMask);
+  mask = makeMask(redMask);
+  in.copyTo(maskedBox,mask);
+  showImage(maskedBox);
+  split(maskedBox,bgr);
+  equalizeHist(bgr[0],bgr[0]);
+  equalizeHist(bgr[1],bgr[1]);
+  equalizeHist(bgr[2],bgr[2]);
+  merge(bgr,3,maskedBox);
+  showImage(maskedBox);
+  cvtColor(maskedBox,gray,CV_BGR2GRAY);
+  GaussianBlur(gray,gray,Size(7,7),0);
+  Canny(gray,gray,20,50);
+  //std::vector<std::vector<Point> > contours;
+  findContours(gray,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
+  drawContours(gray,contours,-1,Scalar(255,0,255),1);
+  showImage(gray);
+  drawContours(gray,contours,-1,Scalar(255),3);
+  findContours(gray,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
+  std::vector<Rect > possibleBoxes = determineBoxes(contours); 
+  std::vector<Rect> rtn;
+  for(int i = 0; i < contours.size(); i++) {
+    std::vector<Point> appr;
+    approxPolyDP(contours[i],appr,1,true);
+    possibleBoxes.push_back(boundingRect(appr));
+  }
+  for(int i = 0; i < possibleBoxes.size(); i++) {
+    if(possibleBoxes[i].area() > 10000 && std::abs(((double)possibleBoxes[i].height/possibleBoxes[i].width) - BOX_AR) < 0.6) {
+      rtn.push_back(possibleBoxes[i]);
+    }
+  }
+  return rtn;
+}
+
+
+void threadDoEveryOtherLaser(std::vector<Mat> imgVec) {
+  for(int q = 0; q < imgVec.size(); q++) {
+    Mat img = imgVec[q];
+      for(int t = 0; t < img.cols; t++) {
+	Vec3b at = img.at<Vec3b>(0,t);
+	if(at[0] < 200 || at[1] < 200 || at[2] < 200) {
+	  Vec3b newVal(0,0,0);
+	  img.at<Vec3b>(0,t)=newVal;
+	  
+	}
+    } 
+  }
+}
+
+Mat changeToMaxLaser (Mat& in) {
+  Mat img;
+  GaussianBlur(in,img,Size(7,7),0);
+  std::vector<Mat> evens;
+  std::vector<Mat> odds;
+  for(int i = 0; i < img.rows; i++) {
+    if(i&2 == 0) {evens.push_back(img.row(i));
+    } else {odds.push_back(img.row(i));}
+  }
+  std::thread first(threadDoEveryOtherLaser,evens);
+  std::thread second(threadDoEveryOtherLaser,odds);
+  first.join();
+  second.join();
+  return img;
+}
+
+
 int main() {
-  std::string imgName = "17foot_LeftBox.png";
+  std::string imgName = "17foot_LeftBoxwithLaser.png";
+  Mat laser = imread(imgName);
+  Rect ROI(laser.cols/2 -25,0,200,laser.rows);
+  Mat other = laser(ROI);
+  showImage(other);
+  other = changeToMaxLaser(other);
+  cvtColor(other,other,CV_BGR2GRAY);
+  Canny(other,other,50,150);
+  std::vector<std::vector<Point> > contours;
+  std::vector<std::vector<Point> > keep;
+  findContours(other,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
+  for(int i = 0; i < contours.size(); i++) {
+    std::vector<Point> approx;
+    approxPolyDP(contours[i],approx,1,true);
+    Point2f pt;
+    float val = 0;
+    minEnclosingCircle(approx,pt,val);
+    if(std::abs(PI*val*val -  (float)contourArea(approx)) < 100) {
+      keep.push_back(approx);
+    }
+  }
+  drawContours(other,keep,-1,Scalar(100),10);
+  showImage(other);
+  /* other = createHorizontalDelta(other);
+  cvtColor(other,other,CV_BGR2GRAY);
+   threshold(other,other,20,255,0);
+  showImage(other);
+  equalizeHist(other,other);
+  showImage(other);
+  Canny(other,other,10,15);
+  std::vector<std::vector<Point> > contours;
+  findContours(other,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
+  drawContours(other,contours,-1,Scalar(100),1);
+  showImage(other);
+  // VideoCapture cap(0);
+
+  //////////////////////////////////////////////////////////////
+  //WORKING CODE DONT TOUCH
+  // std::string imgName = "17foot_BothBoxes.png";
+  /*        std::string imgName = "17foot_LeftBox.png";
   Mat box = imread(imgName);
+  //cap >> box;
+  resize(box,box,Size(640,480));
+  std::vector<Rect> boxes = findBoxes(box);
+  for(int i = 0; i < boxes.size(); i++) {
+    rectangle(box,boxes[i],Scalar(255,0,255),3);
+  }
+  showImage(box);/*
+  //////////////////////////////////////////////////////////////
+
+  
+  Mat cpy;
+  resize(box,box,Size(640,480));
+  Mat bgr[3];
+  split(box,bgr);
+  equalizeHist(bgr[0],bgr[0]);
+  equalizeHist(bgr[1],bgr[1]);
+  equalizeHist(bgr[2],bgr[2]);
+  GaussianBlur(bgr[0],bgr[0],Size(7,7),0);
+  GaussianBlur(bgr[1],bgr[1],Size(7,7),0);
+  GaussianBlur(bgr[2],bgr[2],Size(7,7),0);
+  // showImage(bgr[1]);
+  Scalar stdDev,mean;
+  meanStdDev(bgr[1],mean,stdDev);
+  std::cout << mean << std::endl;
+  threshold(bgr[1],bgr[1],mean[0],255,4);
+  //resize(bgr[1],bgr[1],Size(1000,1000));
+ // showImage(bgr[1]);
+
+
+ // showImage(bgr[0]);
+
+
+ meanStdDev(bgr[0],mean,stdDev);
+ std::cout << mean << std::endl;
+ threshold(bgr[0],bgr[0],mean[0],255,4);
+
+ Mat mask;
+ bitwise_or(bgr[0],bgr[1],mask);
+ threshold(mask,mask,1,255,0);
+ showImage(mask);
+ 
+ // resize(bgr[0],bgr[0],Size(1000,1000));
+ //showImage(bgr[0]);
+ Mat out;
+ Mat outBgr[3];
+ bgr[0].copyTo(outBgr[0],mask);
+bgr[1].copyTo(outBgr[1],mask);
+bgr[2].copyTo(outBgr[2],mask);
+ merge(outBgr,3,out);
+ removeRedNotHighest(out);
+ out.copyTo(cpy);
+
+ cvtColor(out,out,CV_BGR2GRAY);
+ equalizeHist(out,out);
+ //  Canny(out,out,100,150);
+ std::vector<KeyPoint> keyPts;
+ FAST(out,keyPts,10);
+ //std::cout << keyPts.size() << std::endl;
+ removeKeyPoints(out,keyPts);
+ //std::cout << keyPts.size() << std::endl;
+  removeHSV(cpy,keyPts);
+ //std::cout << keyPts.size() << std::endl;
+ //findBox(cpy,keyPts);
+ // showImage(cpy);
+ drawKeypoints(cpy,keyPts,cpy);
+ // showImage(out);
+ imwrite("out.png",cpy);
+ showImage(cpy);
+
+
+  /* std::vector<std::vector<Point> > contours;
+ findContours(out,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
+ contours = filterBasedOnArea(contours);
+ drawContours(out,contours,-1,Scalar(100),2);
+ showImage(out);*/
+ 
+ /* showImage(bgr[1]);
+ showImage(bgr[2]);
+ Mat out;
+ merge(bgr,3,out);
+ showImage(out);*/
+
+
+
+  /*
   Mat boxCpy = imread(imgName);
   RNG rng(12345);
   box = filterOutNonBox(box);
@@ -376,7 +750,7 @@ int main() {
   std::vector<std::vector<Point> > contours;
   findContours(box,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
   drawContours(boxCpy,contours,-1,Scalar(255,0,0),2);
-  showImage(box);
+  // showImage(box);
   contours = filterBasedOnArea(contours);
   
   std::vector<Rect> boxes = determineBoxes(contours);
@@ -385,8 +759,9 @@ int main() {
   }
   Mat show;
   resize(boxCpy,show,Size(1000,1000));
-  GaussianBlur(show,show,Size(271,271),0);
+  // GaussianBlur(show,show,Size(7,7),0);
   showImage(show);
+   imwrite("out.png",show);
   /*Mat laser = imread("15Feet.png");
   Mat noLaser = imread("15FeetLaser.png");
   Mat diff = getDiff(laser,noLaser);

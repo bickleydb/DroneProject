@@ -1,5 +1,4 @@
 #include <Python.h>
-
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
 #include "opencv2/core.hpp"
@@ -24,7 +23,6 @@
 #include <opencv2/features2d/features2d.hpp>
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui.hpp"
-
 #include "opencv2/calib3d.hpp"
 #include "opencv2/imgproc.hpp"
 
@@ -42,6 +40,65 @@ using namespace cv;
 using namespace std;
 
 
+///////////////////////////////////////////////////////////////////////////
+/*
+This group of functions is what is able to be used in Python.
+
+
+char* params is the bits of the image, found with tostring('c')
+width and height are self explanitory
+
+
+
+ */
 void displayImage(char* img, int width, int height);
 double getPaperDist(char * img, int width, int height);
+void displayImage(char* img, int width, int height);
+double getPaperDistByCorner(char * img, int width, int height);
+double getLaserDist (char * img1, char* img2, int width, int height);
+double getPaperDistContour(char * img, int width, int height);
+
+/*
+These functions return a python list, when a collection would be the most 
+reasonable thing to return. Look at the function in the .cpp file for more
+explanation about the format of each returned list.
+ */
+boost::python::list getLaserLocation (char * img1, char * img2, int width, int height);
+boost::python::list getBoxes(char * img, int width, int height);
+boost::python::list getPaperByCorner(char * img, int width, int height);
+boost::python::list  paperContour(char* img, int width, int height);
+///////////////////////////////////////////////////////////////////////
+
+
+
+//////////////////////////////////////////////////////////////////////////
+/*
+
+Group of C++ helper functions, not visible in Python.
+
+ */
 double getAverageBright(std::vector<Mat> const img);
+void displayImageInner(Mat image);
+double getWidth(std::vector<KeyPoint> paper);
+double getWidth(std::vector<Point> paper);
+double calculateDistance(double width, double inchWidth);
+void hsvSplit (Mat const img, std::vector<Mat>& vects);
+double getAverageBright(std::vector<cv::Mat> const img);
+Mat getDiff (Mat& first, Mat& second);
+Point2f determineLaserPoint(std::vector<std::vector<Point> >& pts);
+Mat valThresholding(Mat& val);
+Mat hueThresholding(Mat& hue);
+Mat satThresholding(Mat& sat);
+Mat filterOutNonBox(Mat& box);
+double calcDistance(double yCoor);
+
+
+std::vector<Point> pickBiggestPaper(std::vector<std::vector<Point> >& possibles);
+std::vector<std::vector<Point> > getPaperShapedContours(std::vector<std::vector<Point> > contours, double ar);
+std::vector<Point> getPaperContour(Mat& img);
+std::vector<std::vector<Point> > filterBasedOnArea(std::vector<std::vector<Point> >& contours);
+std::vector<Rect> determineBoxes(std::vector<std::vector<Point> >& contours);
+std::vector<std::vector<Point> > findCircleContours (Mat& image);
+
+
+////////////////////////////////////////////////////////////////////
