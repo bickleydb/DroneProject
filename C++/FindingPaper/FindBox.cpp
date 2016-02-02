@@ -549,23 +549,18 @@ std::vector<Rect> findBoxes(Mat& in) {
   std::vector<std::vector<Point> > contours;
   in.copyTo(preservedColor);
   redMask = changeToMax(in);
-  showImage(redMask);
   mask = makeMask(redMask);
   in.copyTo(maskedBox,mask);
-  showImage(maskedBox);
   split(maskedBox,bgr);
   equalizeHist(bgr[0],bgr[0]);
   equalizeHist(bgr[1],bgr[1]);
   equalizeHist(bgr[2],bgr[2]);
   merge(bgr,3,maskedBox);
-  showImage(maskedBox);
   cvtColor(maskedBox,gray,CV_BGR2GRAY);
   GaussianBlur(gray,gray,Size(7,7),0);
   Canny(gray,gray,20,50);
   //std::vector<std::vector<Point> > contours;
   findContours(gray,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
-  drawContours(gray,contours,-1,Scalar(255,0,255),1);
-  showImage(gray);
   drawContours(gray,contours,-1,Scalar(255),3);
   findContours(gray,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
   std::vector<Rect > possibleBoxes = determineBoxes(contours); 
@@ -616,7 +611,7 @@ Mat changeToMaxLaser (Mat& in) {
 
 
 int main() {
-  std::string imgName = "17foot_LeftBoxwithLaser.png";
+  /* std::string imgName = "17foot_LeftBoxwithLaser.png";
   Mat laser = imread(imgName);
   Rect ROI(laser.cols/2 -25,0,200,laser.rows);
   Mat other = laser(ROI);
@@ -638,7 +633,7 @@ int main() {
     }
   }
   drawContours(other,keep,-1,Scalar(100),10);
-  showImage(other);
+  showImage(other);*/
   /* other = createHorizontalDelta(other);
   cvtColor(other,other,CV_BGR2GRAY);
    threshold(other,other,20,255,0);
@@ -649,21 +644,27 @@ int main() {
   std::vector<std::vector<Point> > contours;
   findContours(other,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
   drawContours(other,contours,-1,Scalar(100),1);
-  showImage(other);
-  // VideoCapture cap(0);
-
+  showImage(other);*/
+  VideoCapture cap(0);
+  while(true) {
+    std::cout << "A" << std::endl;
   //////////////////////////////////////////////////////////////
   //WORKING CODE DONT TOUCH
-  // std::string imgName = "17foot_BothBoxes.png";
-  /*        std::string imgName = "17foot_LeftBox.png";
-  Mat box = imread(imgName);
-  //cap >> box;
-  resize(box,box,Size(640,480));
-  std::vector<Rect> boxes = findBoxes(box);
-  for(int i = 0; i < boxes.size(); i++) {
-    rectangle(box,boxes[i],Scalar(255,0,255),3);
+  //  std::string imgName = "17foot_BothBoxes.png";
+   //   std::string imgName = "17foot_LeftBox.png";
+    Mat box;// = imread(imgName);
+    cap >> box;
+    resize(box,box,Size(640,480));
+    std::vector<Rect> boxes = findBoxes(box);
+    for(int i = 0; i < boxes.size(); i++) {
+      rectangle(box,boxes[i],Scalar(255,0,255),3);
   }
-  showImage(box);/*
+    resize(box,box,Size(1920,1080));
+    showMovie(box);
+
+    char c = waitKey(1);
+    if(c == 27) {break;}
+  }/*
   //////////////////////////////////////////////////////////////
 
   

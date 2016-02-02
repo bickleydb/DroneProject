@@ -259,7 +259,7 @@ boost::python::list getPaperByCorner(char * img, int width, int height) {
      boost::python::list point;
      point.append(paper[i].pt.x);
      point.append(paper[i].pt.y);
-     rtn.append(point)
+     rtn.append(point);
    }
    return rtn;
 }
@@ -547,6 +547,94 @@ double getLaserDist (char * img1, char* img2, int width, int height) {
  return calcDistance(pt.y);
 }
 
+void threadDoEveryOther(Mat& img) {
+  for(int i = 0; i < img.rows; i++) {
+    for(int t = 0; t < img.cols; t++) {
+      Vec3b at = img.at<Vec3b>(i,t);
+      if(std::abs(at[2]-at[1]) < 20) {
+	Vec3b newVec(0,0,0);
+	img.at<Vec3b>(i,t) = newVec;
+      } else if(at[0] > at[1] && at[0] > at[2]) {
+	Vec3b newVec(0,0,0);
+	img.at<Vec3b>(i,t) = newVec;
+      } else if(at[1] > at[0] && at[1] > at[2]) {
+	Vec3b newVec(0,0,0);
+	img.at<Vec3b>(i,t) = newVec;
+      } else if(at[2] > at[0] && at[2] > at[1]) {
+	Vec3b newVec(0,0,255);
+	img.at<Vec3b>(i,t) = newVec;
+      } else {
+	Vec3b newVec(0,0,0);
+	img.at<Vec3b>(i,t) = newVec;
+      }
+    }
+  }
+}
+
+Mat changeToMax (Mat& in) {
+  Mat img;
+  GaussianBlur(in,img,Size(7,7),0);
+  threadDoEveryOther(img);
+  return img;
+}
+
+Mat makeMask (Mat& in) {
+  Mat bgr[3];
+  split(in,bgr);
+  return bgr[2];
+}
+
+
+std::vector<Rect> findBoxes(Mat& in) {
+  Mat preservedColor;
+  Mat redMask, mask,maskedBox,gray;
+  Mat bgr[3];
+  std::vector<std::vector<Point> > contours;
+  in.copyTo(preservedColor);
+  redMask = changeToMax(in);
+  mask = makeMask(redMask);
+  in.copyTo(maskedBox,mask);
+  split(maskedBox,bgr);
+  equalizeHist(bgr[0],bgr[0]);
+  equalizeHist(bgr[1],bgr[1]);
+  equalizeHist(bgr[2],bgr[2]);
+  merge(bgr,3,maskedBox);
+  cvtColor(maskedBox,gray,CV_BGR2GRAY);
+  GaussianBlur(gray,gray,Size(7,7),0);
+  Canny(gray,gray,20,50);
+  findContours(gray,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
+  drawContours(gray,contours,-1,Scalar(255),3);
+  findContours(gray,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
+  std::vector<Rect > possibleBoxes = determineBoxes(contours); 
+  std::vector<Rect> rtn;
+  for(int i = 0; i < contours.size(); i++) {
+    std::vector<Point> appr;
+    approxPolyDP(contours[i],appr,1,true);
+    possibleBoxes.push_back(boundingRect(appr));
+  }
+  for(int i = 0; i < possibleBoxes.size(); i++) {
+    if(possibleBoxes[i].area() > 10000 && std::abs(((double)possibleBoxes[i].height/possibleBoxes[i].width) - BOX_AR) < 0.6) {
+      rtn.push_back(possibleBoxes[i]);
+    }
+  }
+  return rtn;
+}
+
+boost::python::list getAllBoxes (char * img1, int width, int height) {
+ cv::Mat image1(cv::Size(width,height),CV_8UC3,img1,cv::Mat::AUTO_STEP);
+ std::vector<Rect> boxes = findBoxes(image1);
+ boost::python::list rtn;
+ for(int i = 0; i < boxes.size(); i++) {
+   boost::python::list rect;
+   rect.append(boxes[i].x);
+   rect.append(boxes[i].y);
+   rect.append(boxes[i].width);
+   rect.append(boxes[i].height);
+   rtn.append(rect);
+ }
+ return rtn;
+}
+
 
 
 //This part is what Python can see
@@ -561,5 +649,5 @@ BOOST_PYTHON_MODULE(DroneUtils) {
   def("getPaperDistByCorner",getPaperDistByCorner);
   def("getPaperByCorner",getPaperByCorner);
   def("paperContour",paperContour);
-  def("getBoxes",getBoxes);
+  def("getAllBoxes",getAllBoxes);
 }
