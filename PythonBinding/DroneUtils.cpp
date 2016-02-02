@@ -26,7 +26,6 @@ std::vector<KeyPoint> findPaperCornerBased (Mat frame, double avgBright) {
   cvtColor(frame,frame,CV_BGR2GRAY);
   GaussianBlur(frame,frame,Size(3,3),0);
   ///////////////////////////////////////////
-   
 
   //This is an iterative deepening kind of thing, starting keypoint detection 
   //with a large param to find points faster, then going smaller to find more
@@ -402,7 +401,7 @@ double getLaserDist (char * img1, char* img2, int width, int height) {
  cv::Mat diff = getDiff(image1,image2);
  std::vector<std::vector<Point> > contours = findCircleContours(diff);
  Point pt = determineLaserPoint(contours);
- return calcDistance(pt.x);
+ return calcDistance(pt.y);
 }
 
 
