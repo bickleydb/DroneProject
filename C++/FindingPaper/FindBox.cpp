@@ -507,6 +507,35 @@ Mat changeToMax (Mat& in) {
   return img;
 }
 
+void threadDoEveryOtherMin(std::vector<Mat> imgVec) {
+  for(int q = 0; q < imgVec.size(); q++) {
+    Mat img = imgVec[q];
+      for(int t = 0; t < img.cols; t++) {
+	Vec3b at = img.at<Vec3b>(0,t);
+	if(std::abs(at[0] - at[1]) < 20 && std::abs(at[0]-at[2]) < 20 && std::abs(at[1]-at[2]) < 20) {
+	  Vec3b newVal(0,0,0);
+	  img.at<Vec3b>(0,t) = newVal;
+	}
+    } 
+  }
+}
+
+Mat changeToMin (Mat& in) {
+  Mat img;
+  GaussianBlur(in,img,Size(7,7),0);
+  std::vector<Mat> evens;
+  std::vector<Mat> odds;
+  for(int i = 0; i < img.rows; i++) {
+    if(i&2 == 0) {evens.push_back(img.row(i));
+    } else {odds.push_back(img.row(i));}
+  }
+  std::thread first(threadDoEveryOtherMin,evens);
+  std::thread second(threadDoEveryOtherMin,odds);
+  first.join();
+  second.join();
+  return img;
+}
+
 Mat makeMask (Mat& in) {
   Mat bgr[3];
   split(in,bgr);
@@ -564,14 +593,16 @@ std::vector<Rect> findBoxes(Mat& in) {
   drawContours(gray,contours,-1,Scalar(255),3);
   findContours(gray,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
   std::vector<Rect > possibleBoxes = determineBoxes(contours); 
+  std::vector<Rect> rectApprox;
   std::vector<Rect> rtn;
   for(int i = 0; i < contours.size(); i++) {
     std::vector<Point> appr;
     approxPolyDP(contours[i],appr,1,true);
-    possibleBoxes.push_back(boundingRect(appr));
+    rectApprox.push_back(boundingRect(appr));
   }
+  possibleBoxes= rectApprox;
   for(int i = 0; i < possibleBoxes.size(); i++) {
-    if(possibleBoxes[i].area() > 10000 && std::abs(((double)possibleBoxes[i].height/possibleBoxes[i].width) - BOX_AR) < 0.6) {
+    if(possibleBoxes[i].area() > 100000 && std::abs(((double)possibleBoxes[i].height/possibleBoxes[i].width) - BOX_AR) < 0.6) {
       rtn.push_back(possibleBoxes[i]);
     }
   }
@@ -609,6 +640,188 @@ Mat changeToMaxLaser (Mat& in) {
   return img;
 }
 
+bool isUseful(unsigned char i) {
+  return i > 1;
+}
+
+void findLeftCorner(Mat const in, int& curX, int& curY) {
+  int startX = curX;
+  int startY = curY;
+  Mat lookingAt = Mat::zeros(in.rows,in.cols,CV_8UC3);
+  int changeX[] = {2,1,0,-1,-2};
+  int changeY[] = {-1,-1,-1,-1,-1};
+  std::vector<int> dx (changeX,changeX+sizeof(changeX)/ sizeof(changeX[0]));
+  std::vector<int> dy (changeY, changeY+sizeof(changeY)/ sizeof(changeY[0]));
+	     
+  bool cont = true;
+  int numDiag  = 0;
+  int direction = 0;
+ 
+  while(true) {
+    std::vector<unsigned char> children;
+    for(int i = 0; i < dx.size(); i++) {
+      children.push_back(in.at<unsigned char>(curX+dx[i],curY+dy[i]));
+      Vec3b stuff(255,255,0);
+      lookingAt.at<Vec3b>(curX+dx[i],curY+dy[i]) = stuff;
+    }
+    std::vector<unsigned char>::iterator found = std::find_if(children.begin(),children.end(),isUseful);
+    int foundX = curX+dx[found-children.begin()];
+    int foundY = curY+dy[found-children.begin()];
+    
+    if(std::abs(foundX-curX) >= 1 && std::abs(foundY-curY) >= 1) {
+      int curDirection = foundY-curY;
+      if(numDiag == 20  ||  (std::abs(startX-curX) > 5) && numDiag == 5) {
+	break;
+      } else {
+	if(numDiag == 0) {
+	  numDiag++;
+	  direction = curDirection;
+	} else {
+	  if(direction == curDirection) {
+	    numDiag++;
+	  } else {
+	    direction = curDirection;
+	    numDiag = 1;
+	  }
+	}
+      }
+    } else {
+      numDiag = 0;
+    }
+    if(found == children.end()) {
+	break;
+    } else {
+      curX = foundX;
+      curY = foundY;  
+    }
+  }
+  // showImage(lookingAt);
+}
+
+void findRightCorner(Mat const in, int& curX, int& curY) {
+  int startX = curX;
+  int startY = curY;
+  int changeX[] = {2,1,0,-1,-2};
+  int changeY[] = {1,1,1,1,1};
+  std::vector<int> dx (changeX,changeX+sizeof(changeX)/ sizeof(changeX[0]));
+  std::vector<int> dy (changeY, changeY+sizeof(changeY)/ sizeof(changeY[0]));
+	     
+  bool cont = true;
+  int numDiag  = 0;
+  int direction = 0;
+ 
+  while(true) {
+    std::vector<unsigned char> children;
+    for(int i = 0; i < dx.size(); i++) {
+      children.push_back(in.at<unsigned char>(curX+dx[i],curY+dy[i]));
+      Vec3b stuff(255,255,0);
+    }
+    std::vector<unsigned char>::iterator found = std::find_if(children.begin(),children.end(),isUseful);
+    int foundX = curX+dx[found-children.begin()];
+    int foundY = curY+dy[found-children.begin()];
+    
+    if(std::abs(foundX-curX) >= 1 && std::abs(foundY-curY) >= 1) {
+      int curDirection = foundY-curY;
+      if(numDiag == 20 || (std::abs(startX-curX) > 5) && numDiag == 10) {
+	break;
+      } else {
+	if(numDiag == 0) {
+	  numDiag++;
+	  direction = curDirection;
+	} else {
+	  if(direction == curDirection) {
+	    numDiag++;
+	  } else {
+	    direction = curDirection;
+	    numDiag = 1;
+	  }
+	}
+      }
+    } else {
+      numDiag = 0;
+    }
+    if(found == children.end()) {
+	break;
+    } else {
+      curX = foundX;
+      curY = foundY;  
+    }
+  }
+}
+
+
+
+
+void removeAverageBlackRows(Mat& img) {
+  for(int i = 0; i < img.rows; i++) {
+    Mat row = img.row(i);
+    Scalar average;
+    Scalar stdDev;
+    meanStdDev(row,average,stdDev);
+    if(average[0] < 10) {
+      img.row(i) = Mat::zeros(1,img.cols,CV_8UC3);
+    }
+  }
+
+}
+
+
+
+std::vector<Point> findBoxCorner (Mat& color) {
+  Mat in;
+  std::cout << color.cols << std::endl;
+  GaussianBlur(color,color,Size(7,7),0);
+  removeAverageBlackRows(color);
+  cvtColor(color,in,CV_BGR2GRAY);
+  Canny(in,in,50,50);
+
+  int curX = 0;
+  int curY = in.cols/2;
+  unsigned char cur = in.at<unsigned char>(curX,curY);
+  Vec3b lookedAtColor = Vec3b(0,255,255);
+  while(cur < 1) {
+    curX++;
+    cur = in.at<unsigned char>(curX,curY);
+  }
+  curX--;
+  int topLeftX = curX;
+  int topLeftY = curY;
+  int topRightX = curX;
+  int topRightY = curY;
+  findLeftCorner(in,topLeftX,topLeftY);
+  findRightCorner(in,topRightX,topRightY);
+
+  curX = in.rows;
+  curY = in.cols/2;
+  cur = in.at<unsigned char>(curX,curY);
+
+  while(cur < 1) {
+    curX--;
+    in.at<unsigned char>(curX,curY-1) = (unsigned char) (100);
+    cur = in.at<unsigned char>(curX,curY);
+  }
+  curX--;
+  int bottomLeftX = curX;
+  int bottomLeftY = curY;
+  int bottomRightX = curX;
+  int bottomRightY = curY;
+  findLeftCorner(in,bottomLeftX,bottomLeftY);
+  findRightCorner(in,bottomRightX,bottomRightY);
+
+  std::vector<Point> corners;
+  corners.push_back(Point(topLeftY,topLeftX));
+  corners.push_back(Point(topRightY,topRightX));
+  corners.push_back(Point(bottomLeftY,bottomLeftX));
+  corners.push_back(Point(bottomRightY,bottomRightX));
+		   
+  for(int i =0; i < corners.size(); i++) {
+    circle(in,corners[i],10,Scalar(255),2);
+  }
+  showImage(in);
+  return corners;
+}
+
+
 
 int main() {
   /* std::string imgName = "17foot_LeftBoxwithLaser.png";
@@ -645,138 +858,43 @@ int main() {
   findContours(other,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
   drawContours(other,contours,-1,Scalar(100),1);
   showImage(other);*/
-  VideoCapture cap(0);
+  /* VideoCapture cap(0);
   while(true) {
-    std::cout << "A" << std::endl;
+  std::cout << "A" << std::endl;*/
   //////////////////////////////////////////////////////////////
   //WORKING CODE DONT TOUCH
-  //  std::string imgName = "17foot_BothBoxes.png";
-   //   std::string imgName = "17foot_LeftBox.png";
-    Mat box;// = imread(imgName);
-    cap >> box;
-    resize(box,box,Size(640,480));
+  // std::string imgName = "17foot_RightBoxwithLaser.png";
+    std::string imgName = "17foot_RightBox.png";
+    Mat box = imread(imgName);
+    //  cap >> box;
+    // resize(box,box,Size(640,480));
     std::vector<Rect> boxes = findBoxes(box);
     for(int i = 0; i < boxes.size(); i++) {
-      rectangle(box,boxes[i],Scalar(255,0,255),3);
-  }
-    resize(box,box,Size(1920,1080));
-    showMovie(box);
+      Rect cur = boxes[i];
+      //circle(box,Point(cur.x,cur.y),5,Scalar(0,0,255),5);
+      std::cout << cur.width << std::endl;
+      cur.x-=10;
+      cur.y-=10;
+      cur.width+=20;
+      cur.height+=20;
+      Mat curLookAt = box(cur);
+      curLookAt = changeToMin(curLookAt);
+      std::vector<Point> corners = findBoxCorner(curLookAt);
+      for(int t = 0; t < corners.size(); t++) {
+	corners[t].x+=cur.x;
+	corners[t].y+=cur.y;
+	circle(box,corners[t],5,Scalar(0,0,0),5);
+      }
+      //showImage(cur);
+    }
+    resize(box,box,Size(1000,1000));
+     showImage(box);
+    //  resize(box,box,Size(1920,1080));
+    //   showImage(box);
+    /*  showMovie(box);
 
     char c = waitKey(1);
     if(c == 27) {break;}
-  }/*
-  //////////////////////////////////////////////////////////////
-
-  
-  Mat cpy;
-  resize(box,box,Size(640,480));
-  Mat bgr[3];
-  split(box,bgr);
-  equalizeHist(bgr[0],bgr[0]);
-  equalizeHist(bgr[1],bgr[1]);
-  equalizeHist(bgr[2],bgr[2]);
-  GaussianBlur(bgr[0],bgr[0],Size(7,7),0);
-  GaussianBlur(bgr[1],bgr[1],Size(7,7),0);
-  GaussianBlur(bgr[2],bgr[2],Size(7,7),0);
-  // showImage(bgr[1]);
-  Scalar stdDev,mean;
-  meanStdDev(bgr[1],mean,stdDev);
-  std::cout << mean << std::endl;
-  threshold(bgr[1],bgr[1],mean[0],255,4);
-  //resize(bgr[1],bgr[1],Size(1000,1000));
- // showImage(bgr[1]);
-
-
- // showImage(bgr[0]);
-
-
- meanStdDev(bgr[0],mean,stdDev);
- std::cout << mean << std::endl;
- threshold(bgr[0],bgr[0],mean[0],255,4);
-
- Mat mask;
- bitwise_or(bgr[0],bgr[1],mask);
- threshold(mask,mask,1,255,0);
- showImage(mask);
- 
- // resize(bgr[0],bgr[0],Size(1000,1000));
- //showImage(bgr[0]);
- Mat out;
- Mat outBgr[3];
- bgr[0].copyTo(outBgr[0],mask);
-bgr[1].copyTo(outBgr[1],mask);
-bgr[2].copyTo(outBgr[2],mask);
- merge(outBgr,3,out);
- removeRedNotHighest(out);
- out.copyTo(cpy);
-
- cvtColor(out,out,CV_BGR2GRAY);
- equalizeHist(out,out);
- //  Canny(out,out,100,150);
- std::vector<KeyPoint> keyPts;
- FAST(out,keyPts,10);
- //std::cout << keyPts.size() << std::endl;
- removeKeyPoints(out,keyPts);
- //std::cout << keyPts.size() << std::endl;
-  removeHSV(cpy,keyPts);
- //std::cout << keyPts.size() << std::endl;
- //findBox(cpy,keyPts);
- // showImage(cpy);
- drawKeypoints(cpy,keyPts,cpy);
- // showImage(out);
- imwrite("out.png",cpy);
- showImage(cpy);
-
-
-  /* std::vector<std::vector<Point> > contours;
- findContours(out,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
- contours = filterBasedOnArea(contours);
- drawContours(out,contours,-1,Scalar(100),2);
- showImage(out);*/
- 
- /* showImage(bgr[1]);
- showImage(bgr[2]);
- Mat out;
- merge(bgr,3,out);
- showImage(out);*/
-
-
-
-  /*
-  Mat boxCpy = imread(imgName);
-  RNG rng(12345);
-  box = filterOutNonBox(box);
-  Canny(box,box,50,100);
-  // showImage(box);
-  std::vector<std::vector<Point> > contours;
-  findContours(box,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
-  drawContours(boxCpy,contours,-1,Scalar(255,0,0),2);
-  // showImage(box);
-  contours = filterBasedOnArea(contours);
-  
-  std::vector<Rect> boxes = determineBoxes(contours);
-  for(int i = 0; i < boxes.size(); i++) {
-    rectangle(boxCpy,boxes[i],Scalar(0,255,0),5);
-  }
-  Mat show;
-  resize(boxCpy,show,Size(1000,1000));
-  // GaussianBlur(show,show,Size(7,7),0);
-  showImage(show);
-   imwrite("out.png",show);
-  /*Mat laser = imread("15Feet.png");
-  Mat noLaser = imread("15FeetLaser.png");
-  Mat diff = getDiff(laser,noLaser);
-  Point laserDot =  determineLaserPoint(findCircleContours(diff));
-  Point pt(std::abs((laser.cols/2) - laserDot.x), std::abs((laser.rows/2)-laserDot.y));
-  std::cout << pt << std::endl;
-  std::cout << calcDistance(laserDot.y) << std::endl;
-  
-    /*Point pt = determineLaserPoint(findCircleContours(noLaser));
-    std::cout << pt << std::endl;
-    std::vector<KeyPoint> paper = findPaper(laser);
-    double widthPixels =  getPerim(paper);
-    double distance = calculateDistance(widthPixels,8.6);
-    drawKeypoints(laser,paper,laser);*/
-
+    }*/
   return 0;
 }
