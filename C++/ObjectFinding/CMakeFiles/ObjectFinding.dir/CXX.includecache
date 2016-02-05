@@ -498,13 +498,3 @@ opencv2/opencv.hpp
 opencv2/core/core_c.h
 /usr/local/include/opencv2/videoio/opencv2/core/core_c.h
 
-/usr/local/include/opencv2/xfeatures2d.hpp
-opencv2/features2d.hpp
-/usr/local/include/opencv2/opencv2/features2d.hpp
-opencv2/xfeatures2d/nonfree.hpp
-/usr/local/include/opencv2/opencv2/xfeatures2d/nonfree.hpp
-
-/usr/local/include/opencv2/xfeatures2d/nonfree.hpp
-opencv2/features2d.hpp
-/usr/local/include/opencv2/xfeatures2d/opencv2/features2d.hpp
-

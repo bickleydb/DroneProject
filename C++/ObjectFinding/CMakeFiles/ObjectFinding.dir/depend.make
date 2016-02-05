@@ -59,6 +59,4 @@ CMakeFiles/ObjectFinding.dir/ObjectFinding.cpp.o: /usr/local/include/opencv2/vid
 CMakeFiles/ObjectFinding.dir/ObjectFinding.cpp.o: /usr/local/include/opencv2/video/tracking_c.h
 CMakeFiles/ObjectFinding.dir/ObjectFinding.cpp.o: /usr/local/include/opencv2/videoio.hpp
 CMakeFiles/ObjectFinding.dir/ObjectFinding.cpp.o: /usr/local/include/opencv2/videoio/videoio_c.h
-CMakeFiles/ObjectFinding.dir/ObjectFinding.cpp.o: /usr/local/include/opencv2/xfeatures2d.hpp
-CMakeFiles/ObjectFinding.dir/ObjectFinding.cpp.o: /usr/local/include/opencv2/xfeatures2d/nonfree.hpp
 

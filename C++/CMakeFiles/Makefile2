@@ -56,38 +56,38 @@ CMAKE_SOURCE_DIR = /home/daniel/DroneProject/C++
 CMAKE_BINARY_DIR = /home/daniel/DroneProject/C++
 
 #=============================================================================
-# Target rules for target CMakeFiles/FeaturePoints.dir
+# Target rules for target CMakeFiles/NonFree2.dir
 
 # All Build rule for target.
-CMakeFiles/FeaturePoints.dir/all:
-	$(MAKE) -f CMakeFiles/FeaturePoints.dir/build.make CMakeFiles/FeaturePoints.dir/depend
-	$(MAKE) -f CMakeFiles/FeaturePoints.dir/build.make CMakeFiles/FeaturePoints.dir/build
+CMakeFiles/NonFree2.dir/all:
+	$(MAKE) -f CMakeFiles/NonFree2.dir/build.make CMakeFiles/NonFree2.dir/depend
+	$(MAKE) -f CMakeFiles/NonFree2.dir/build.make CMakeFiles/NonFree2.dir/build
 	$(CMAKE_COMMAND) -E cmake_progress_report /home/daniel/DroneProject/C++/CMakeFiles  1
-	@echo "Built target FeaturePoints"
-.PHONY : CMakeFiles/FeaturePoints.dir/all
+	@echo "Built target NonFree2"
+.PHONY : CMakeFiles/NonFree2.dir/all
 
 # Include target in all.
-all: CMakeFiles/FeaturePoints.dir/all
+all: CMakeFiles/NonFree2.dir/all
 .PHONY : all
 
 # Build rule for subdir invocation for target.
-CMakeFiles/FeaturePoints.dir/rule: cmake_check_build_system
+CMakeFiles/NonFree2.dir/rule: cmake_check_build_system
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/daniel/DroneProject/C++/CMakeFiles 1
-	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/FeaturePoints.dir/all
+	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/NonFree2.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/daniel/DroneProject/C++/CMakeFiles 0
-.PHONY : CMakeFiles/FeaturePoints.dir/rule
+.PHONY : CMakeFiles/NonFree2.dir/rule
 
 # Convenience name for target.
-FeaturePoints: CMakeFiles/FeaturePoints.dir/rule
-.PHONY : FeaturePoints
+NonFree2: CMakeFiles/NonFree2.dir/rule
+.PHONY : NonFree2
 
 # clean rule for target.
-CMakeFiles/FeaturePoints.dir/clean:
-	$(MAKE) -f CMakeFiles/FeaturePoints.dir/build.make CMakeFiles/FeaturePoints.dir/clean
-.PHONY : CMakeFiles/FeaturePoints.dir/clean
+CMakeFiles/NonFree2.dir/clean:
+	$(MAKE) -f CMakeFiles/NonFree2.dir/build.make CMakeFiles/NonFree2.dir/clean
+.PHONY : CMakeFiles/NonFree2.dir/clean
 
 # clean rule for target.
-clean: CMakeFiles/FeaturePoints.dir/clean
+clean: CMakeFiles/NonFree2.dir/clean
 .PHONY : clean
 
 #=============================================================================
