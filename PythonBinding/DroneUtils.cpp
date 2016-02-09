@@ -608,12 +608,14 @@ std::vector<Rect> findBoxes(Mat& in) {
   drawContours(gray,contours,-1,Scalar(255),3);
   findContours(gray,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
   std::vector<Rect > possibleBoxes = determineBoxes(contours); 
+  std::vector<Rect> approximated;
   std::vector<Rect> rtn;
   for(int i = 0; i < contours.size(); i++) {
     std::vector<Point> appr;
     approxPolyDP(contours[i],appr,1,true);
-    possibleBoxes.push_back(boundingRect(appr));
+    approximated.push_back(boundingRect(appr));
   }
+  possibleBoxes = approximated;
   for(int i = 0; i < possibleBoxes.size(); i++) {
     if(possibleBoxes[i].area() > 10000 && std::abs(((double)possibleBoxes[i].height/possibleBoxes[i].width) - BOX_AR) < 0.6) {
       rtn.push_back(possibleBoxes[i]);
@@ -656,10 +658,8 @@ Point findLeftCorner(Mat const in, int curX, int curY) {
     for(int i = 0; i < dx.size(); i++) {
       if(curX+dx[i] >= 0 && curX+dx[i] < in.rows && curY+dy[i] >= 0 && curY+dy[i] < in.cols) {
 	children.push_back(in.at<unsigned char>(curX+dx[i],curY+dy[i]));
-      } else {
-      }
-      Vec3b stuff(255,255,0);
-      lookingAt.at<Vec3b>(curX+dx[i],curY+dy[i]) = stuff;
+      } 
+     
       
     }
     std::vector<unsigned char>::iterator found = std::find_if(children.begin(),children.end(),isUseful);
@@ -777,7 +777,6 @@ std::vector<Point> findBoxCorner (Mat& color) {
   cvtColor(color,in,CV_BGR2GRAY);
   Canny(in,in,50,50);
 
-  //showImage(in);
   int curX = 0;
   int curY = in.cols/2;
   unsigned char cur = in.at<unsigned char>(curX,curY);
@@ -789,7 +788,6 @@ std::vector<Point> findBoxCorner (Mat& color) {
       return std::vector<Point>();
     }
   }
-  
   int topLeftX = curX;
   int topLeftY = curY;
   int topRightX = curX;
@@ -802,7 +800,6 @@ std::vector<Point> findBoxCorner (Mat& color) {
   
    curY = in.cols/2;
    cur = in.at<unsigned char>(curX,curY);
-
   while(cur < 1) {
     curX--;
     in.at<unsigned char>(curX,curY-1) = (unsigned char) (100);
@@ -811,7 +808,6 @@ std::vector<Point> findBoxCorner (Mat& color) {
       return std::vector<Point>();
     }
   }
-
   int bottomLeftX = curX;
   int bottomLeftY = curY;
   int bottomRightX = curX;
@@ -865,12 +861,14 @@ boost::python::list getBoxCorner(char* img, int width, int height) {
     Mat curLookAt = image(cur);
     changeToMin(curLookAt);
     std::vector<Point> corners = findBoxCorner(curLookAt);
+    boost::python::list box;
     for(int t = 0; t < corners.size(); t++) {
       corners[t].x+=cur.x;
       corners[t].y+=cur.y;
-      rtn.append(corners[t].x);
-      rtn.append(corners[t].y);
+      box.append(corners[t].x);
+      box.append(corners[t].y);
     }
+    rtn.append(box);
   }
   return rtn;
 }
@@ -890,5 +888,5 @@ BOOST_PYTHON_MODULE(DroneUtils) {
   def("getPaperByCorner",getPaperByCorner);
   def("paperContour",paperContour);
   def("getAllBoxes",getAllBoxes);
-  def("findBoxCorner", findBoxCorner);
+  def("getBoxCorner", getBoxCorner);
 }
