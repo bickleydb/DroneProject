@@ -583,9 +583,7 @@ Mat makeMask (Mat& in) {
   split(in,bgr);
   return bgr[2];
 }
-bool isUseful(unsigned char i) {
-  return i > 1;
-}
+
 
 std::vector<Rect> findBoxes(Mat& in) {
   Mat preservedColor;
@@ -622,6 +620,10 @@ std::vector<Rect> findBoxes(Mat& in) {
     }
   }
   return rtn;
+}
+
+bool isUseful(unsigned char i) {
+  return i > 1;
 }
 
 boost::python::list getAllBoxes (char * img1, int width, int height) {
@@ -874,7 +876,6 @@ boost::python::list getBoxCorner(char* img, int width, int height) {
 }
 
 
-
 //This part is what Python can see
 //when the module is imported.
 BOOST_PYTHON_MODULE(DroneUtils) {
@@ -889,4 +890,5 @@ BOOST_PYTHON_MODULE(DroneUtils) {
   def("paperContour",paperContour);
   def("getAllBoxes",getAllBoxes);
   def("getBoxCorner", getBoxCorner);
+
 }
