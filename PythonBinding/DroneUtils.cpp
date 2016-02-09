@@ -583,7 +583,9 @@ Mat makeMask (Mat& in) {
   split(in,bgr);
   return bgr[2];
 }
-
+bool isUseful(unsigned char i) {
+  return i > 1;
+}
 
 std::vector<Rect> findBoxes(Mat& in) {
   Mat preservedColor;
@@ -635,6 +637,244 @@ boost::python::list getAllBoxes (char * img1, int width, int height) {
  return rtn;
 }
 
+Point findLeftCorner(Mat const in, int curX, int curY) {
+  int startX = curX;
+  int startY = curY;
+  Mat lookingAt;
+  in.copyTo(lookingAt);
+  int changeX[] = {2,1,0,-1,-2};
+  int changeY[] = {-1,-1,-1,-1,-1};
+  std::vector<int> dx (changeX,changeX+sizeof(changeX)/ sizeof(changeX[0]));
+  std::vector<int> dy (changeY, changeY+sizeof(changeY)/ sizeof(changeY[0]));
+	     
+  bool cont = true;
+  int numDiag  = 0;
+  int direction = 0;
+ 
+  while(true) {
+    std::vector<unsigned char> children;
+    for(int i = 0; i < dx.size(); i++) {
+      if(curX+dx[i] >= 0 && curX+dx[i] < in.rows && curY+dy[i] >= 0 && curY+dy[i] < in.cols) {
+	children.push_back(in.at<unsigned char>(curX+dx[i],curY+dy[i]));
+      } else {
+      }
+      Vec3b stuff(255,255,0);
+      lookingAt.at<Vec3b>(curX+dx[i],curY+dy[i]) = stuff;
+      
+    }
+    std::vector<unsigned char>::iterator found = std::find_if(children.begin(),children.end(),isUseful);
+    int foundX = curX+dx[found-children.begin()];
+    int foundY = curY+dy[found-children.begin()];
+    
+    if(std::abs(foundX-curX) >= 1 && std::abs(foundY-curY) >= 1) {
+      int curDirection = foundY-curY;
+      if(numDiag == 20  ||  (std::abs(startX-curX) > 5) && numDiag == 10) {
+	break;
+      } else {
+	if(numDiag == 0) {
+	  numDiag++;
+	  direction = curDirection;
+	} else {
+	  if(direction == curDirection) {
+	    numDiag++;
+	  } else {
+	    direction = curDirection;
+	    numDiag = 1;
+	  }
+	}
+      }
+    } else {
+      numDiag = 0;
+    }
+    if(found == children.end()) {
+	break;
+    } else {
+      curX = foundX;
+      curY = foundY;  
+    }
+  }
+ 
+  return Point(curY,curX);
+}
+
+
+
+
+Point findRightCorner(Mat const in, int curX, int curY) {
+  int startX = curX;
+  int startY = curY;
+  int changeX[] = {2,1,0,-1,-2};
+  int changeY[] = {1,1,1,1,1};
+  std::vector<int> dx (changeX,changeX+sizeof(changeX)/ sizeof(changeX[0]));
+  std::vector<int> dy (changeY, changeY+sizeof(changeY)/ sizeof(changeY[0]));
+	     
+  bool cont = true;
+  int numDiag  = 0;
+  int direction = 0;
+ 
+  while(true) {
+    std::vector<unsigned char> children;
+    for(int i = 0; i < dx.size(); i++) {
+       if(curX+dx[i] > 0 && curX+dx[i] < in.rows && curY+dy[i] > 0 && curY+dy[i] < in.cols) {
+	children.push_back(in.at<unsigned char>(curX+dx[i],curY+dy[i]));
+      }
+      Vec3b stuff(255,255,0);
+    }
+    std::vector<unsigned char>::iterator found = std::find_if(children.begin(),children.end(),isUseful);
+    int foundX = curX+dx[found-children.begin()];
+    int foundY = curY+dy[found-children.begin()];
+    
+    if(std::abs(foundX-curX) >= 1 && std::abs(foundY-curY) >= 1) {
+      int curDirection = foundY-curY;
+      if(numDiag == 20 || (std::abs(startX-curX) > 5) && numDiag == 10) {
+	break;
+      } else {
+	if(numDiag == 0) {
+	  numDiag++;
+	  direction = curDirection;
+	} else {
+	  if(direction == curDirection) {
+	    numDiag++;
+	  } else {
+	    direction = curDirection;
+	    numDiag = 1;
+	  }
+	}
+      }
+    } else {
+      numDiag = 0;
+    }
+    if(found == children.end()) {
+	break;
+    } else {
+      curX = foundX;
+      curY = foundY;  
+    }
+  }
+  return Point(curY,curX);
+}
+
+
+
+void removeAverageBlackRows(Mat& img) {
+  for(int i = 0; i < img.rows; i++) {
+    Mat row = img.row(i);
+    Scalar average;
+    Scalar stdDev;
+    meanStdDev(row,average,stdDev);
+    if(average[0] < 10) {
+      img.row(i) = Mat::zeros(1,img.cols,CV_8UC3);
+    }
+  }
+
+}
+
+
+std::vector<Point> findBoxCorner (Mat& color) {
+  Mat in;
+  GaussianBlur(color,color,Size(7,7),0);
+  removeAverageBlackRows(color);
+  cvtColor(color,in,CV_BGR2GRAY);
+  Canny(in,in,50,50);
+
+  //showImage(in);
+  int curX = 0;
+  int curY = in.cols/2;
+  unsigned char cur = in.at<unsigned char>(curX,curY);
+  Vec3b lookedAtColor = Vec3b(0,255,255);
+  while(cur < 1) {
+    curX++;
+    cur = in.at<unsigned char>(curX,curY);
+    if(curX > color.rows/2) {
+      return std::vector<Point>();
+    }
+  }
+  
+  int topLeftX = curX;
+  int topLeftY = curY;
+  int topRightX = curX;
+  int topRightY = curY;
+  Point topLeft, topRight;
+
+   topLeft = findLeftCorner(in,topLeftX,topLeftY);
+   topRight = findRightCorner(in,topRightX,topRightY);
+   curX = in.rows;
+  
+   curY = in.cols/2;
+   cur = in.at<unsigned char>(curX,curY);
+
+  while(cur < 1) {
+    curX--;
+    in.at<unsigned char>(curX,curY-1) = (unsigned char) (100);
+    cur = in.at<unsigned char>(curX,curY);
+    if(curX < color.rows/2) {
+      return std::vector<Point>();
+    }
+  }
+
+  int bottomLeftX = curX;
+  int bottomLeftY = curY;
+  int bottomRightX = curX;
+  int bottomRightY = curY;
+  Point bottomLeft = findLeftCorner(in,bottomLeftX,bottomLeftY);
+  Point bottomRight = findRightCorner(in,bottomRightX,bottomRightY);
+  std::vector<Point> corners;
+  corners.push_back(topLeft);
+  corners.push_back(topRight);
+  corners.push_back(bottomLeft);
+  corners.push_back(bottomRight);
+		   
+  for(int i =0; i < corners.size(); i++) {
+    circle(in,corners[i],10,Scalar(255),2);
+  }
+  return corners;
+}
+
+void changeToMin (Mat& in) {
+  Vec3b black(0,0,0);
+  for(int i = 0; i < in.rows; i++) {
+    for(int t = 0; t < in.cols; t++) {
+      Vec3b at = in.at<Vec3b>(i,t);
+      if(std::abs(at[0] - at[1]) < 20 && std::abs(at[0]-at[2]) < 20 && std::abs(at[1]-at[2]) < 20) {
+	  in.at<Vec3b>(i,t) = black;
+	}
+    }
+  }
+}
+
+
+
+boost::python::list getBoxCorner(char* img, int width, int height) {
+  cv::Mat image(cv::Size(width,height),CV_8UC3,img,cv::Mat::AUTO_STEP);
+  std::vector<Rect> boxes = findBoxes(image);
+  boost::python::list rtn;
+  for(int i = 0; i < boxes.size(); i++) {
+    Rect cur = boxes[i];
+    cur.x = std::max(cur.x-=10,0);
+    cur.y = std::max(cur.y-=10,0);
+    cur.width+=20;
+    cur.height+=20;
+    if(cur.x + cur.width > image.cols) {
+      cur.width = image.cols-cur.x;
+      continue;
+    }	
+    if(cur.y+cur.height > image.rows) {
+      continue;
+      cur.height = image.rows-cur.y;
+    }
+    Mat curLookAt = image(cur);
+    changeToMin(curLookAt);
+    std::vector<Point> corners = findBoxCorner(curLookAt);
+    for(int t = 0; t < corners.size(); t++) {
+      corners[t].x+=cur.x;
+      corners[t].y+=cur.y;
+      rtn.append(corners[t].x);
+      rtn.append(corners[t].y);
+    }
+  }
+  return rtn;
+}
+
 
 
 //This part is what Python can see
@@ -650,4 +890,5 @@ BOOST_PYTHON_MODULE(DroneUtils) {
   def("getPaperByCorner",getPaperByCorner);
   def("paperContour",paperContour);
   def("getAllBoxes",getAllBoxes);
+  def("findBoxCorner", findBoxCorner);
 }
