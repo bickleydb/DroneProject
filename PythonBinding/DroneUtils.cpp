@@ -1,6 +1,5 @@
 
 #include <boost/python.hpp>
-
 #if defined(_MSC_VER) && (_MSC_VER >= 1800)
 // eliminating duplicated round() declaration
 #define HAVE_ROUND 1
@@ -26,8 +25,6 @@ std::vector<KeyPoint> findPaperCornerBased (Mat frame, double avgBright) {
   cvtColor(frame,frame,CV_BGR2GRAY);
   GaussianBlur(frame,frame,Size(3,3),0);
   ///////////////////////////////////////////
-   
-
   //This is an iterative deepening kind of thing, starting keypoint detection 
   //with a large param to find points faster, then going smaller to find more
   //points
@@ -615,7 +612,7 @@ std::vector<Rect> findBoxes(Mat& in) {
   }
   possibleBoxes = approximated;
   for(int i = 0; i < possibleBoxes.size(); i++) {
-    if(possibleBoxes[i].area() > 10000 && std::abs(((double)possibleBoxes[i].height/possibleBoxes[i].width) - BOX_AR) < 0.6) {
+    if(possibleBoxes[i].area() > 100000 && std::abs(((double)possibleBoxes[i].height/possibleBoxes[i].width) - BOX_AR) < 0.6) {
       rtn.push_back(possibleBoxes[i]);
     }
   }
@@ -778,7 +775,7 @@ std::vector<Point> findBoxCorner (Mat& color) {
   removeAverageBlackRows(color);
   cvtColor(color,in,CV_BGR2GRAY);
   Canny(in,in,50,50);
-
+  imwrite("BoxOnPi.png",in);
   int curX = 0;
   int curY = in.cols/2;
   unsigned char cur = in.at<unsigned char>(curX,curY);
@@ -861,12 +858,15 @@ boost::python::list getBoxCorner(char* img, int width, int height) {
       cur.height = image.rows-cur.y;
     }
     Mat curLookAt = image(cur);
+    std::cout << "A" << std::endl;
+    imwrite("curLookedAt.png",curLookAt);
     changeToMin(curLookAt);
     std::vector<Point> corners = findBoxCorner(curLookAt);
     boost::python::list box;
     for(int t = 0; t < corners.size(); t++) {
       corners[t].x+=cur.x;
       corners[t].y+=cur.y;
+      circle(image,corners[t],5,Scalar(0,0,0),5);
       box.append(corners[t].x);
       box.append(corners[t].y);
     }
