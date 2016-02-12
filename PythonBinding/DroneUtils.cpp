@@ -769,11 +769,45 @@ void removeAverageBlackRows(Mat& img) {
 
 }
 
+void removeUnsaturated(Mat& in) {
+  Vec3b ignoreColor(6,100,100);
+  cvtColor(in,in,CV_BGR2HSV);
+  Mat hsv[3];
+  split(in,hsv);
+  equalizeHist(hsv[1],hsv[1]);
+  merge(hsv,3,in);
+  for(int i = 0; i < in.rows; i++) {
+    for(int t = 0; t < in.cols; t++) {
+      Vec3b cur = in.at<Vec3b>(i,t);
+      if(cur[1] < 10) {
+	in.at<Vec3b>(i,t) = ignoreColor;
+      }
+    }
+  }
+  cvtColor(in,in,CV_HSV2BGR);
+}
+
+void removeUnsaturatedSecondPass(Mat& in) {
+  Vec3b ignoreColor(6,100,100);
+  cvtColor(in,in,CV_BGR2HSV);
+  for(int i = in.rows/2; i < in.rows; i++) {
+    for(int t = 0; t < in.cols; t++) {
+      Vec3b cur = in.at<Vec3b>(i,t);
+      if(cur[1] < 20) {
+	in.at<Vec3b>(i,t) = ignoreColor;
+      }
+    }
+  }
+  cvtColor(in,in,CV_HSV2BGR);
+}
+
 
 std::vector<Point> findBoxCorner (Mat& color) {
   Mat in;
-  GaussianBlur(color,color,Size(7,7),0);
   removeAverageBlackRows(color);
+  removeUnsaturated(color);
+  removeUnsaturatedSecondPass(color);
+   GaussianBlur(color,color,Size(7,7),0);
   cvtColor(color,in,CV_BGR2GRAY);
   Canny(in,in,50,50);
 
