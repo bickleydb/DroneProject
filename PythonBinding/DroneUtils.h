@@ -25,6 +25,9 @@
 #include "opencv2/highgui.hpp"
 #include "opencv2/calib3d.hpp"
 #include "opencv2/imgproc.hpp"
+#include <algorithm>
+#include <numeric>
+#include <tuple>
 
 #define PI 3.141592653589793238462643383279502884197169399375105820974944592307816406286 
 #define PAPER_WIDTH 8.6
@@ -32,13 +35,12 @@
 #define HIGH_RED 5
 #define FOCAL_LENGTH 216.79
 #define PAPER_AR 8.5/11.0
-#define FM 667.88
+#define FM 568.356
 #define BOX_AR 44.5/22.5
-#define FB 257.00
+#define FB 254.732
 
 using namespace cv;
 using namespace std;
-
 
 ///////////////////////////////////////////////////////////////////////////
 /*
@@ -85,7 +87,7 @@ double calculateDistance(double width, double inchWidth);
 void hsvSplit (Mat const img, std::vector<Mat>& vects);
 double getAverageBright(std::vector<cv::Mat> const img);
 Mat getDiff (Mat& first, Mat& second);
-Point2f determineLaserPoint(std::vector<std::vector<Point> >& pts);
+Point2f determineLaserPoint(const Mat& frame);
 Mat valThresholding(Mat& val);
 Mat hueThresholding(Mat& hue);
 Mat satThresholding(Mat& sat);

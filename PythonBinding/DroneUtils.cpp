@@ -8,9 +8,7 @@
 #include "DroneUtils.h"
 using namespace cv;
 using namespace std;
-
 std::vector<KeyPoint> findPaperCornerBased (Mat frame, double avgBright) {
-
   //This stuff is setting up the images by
   //    Saving the HSV version of the image
   //    Saving the Gray version of the image
@@ -29,21 +27,16 @@ std::vector<KeyPoint> findPaperCornerBased (Mat frame, double avgBright) {
   //with a large param to find points faster, then going smaller to find more
   //points
   for(int parameter = 10; parameter > 0; parameter--) {
-   
     double offset = 1; //An offset to look at neighbors of key points later
-
     std:vector<KeyPoint> points;
     std::vector<KeyPoint> allPoints;
-
     //KeyPoint detection
     //////////////////////////////////////////////////////////////////////
     FAST(frame,allPoints,parameter);
     //////////////////////////////////////////////////////////////////////
-
     do {      //holy crap a do while loop
       points = std::vector<KeyPoint>(allPoints);
       std::vector<int> keep(points.size()); //Create a vector of ints that will store if they are good points or not
-
       for (std::vector<KeyPoint>::iterator it = points.begin(); it != points.end(); it++) { //Check all the points
 	KeyPoint pt = *it;
 	Vec3b at = colored.at<Vec3b>(pt.pt); //Get HSV value of the point
@@ -382,23 +375,18 @@ Mat getDiff (Mat& first, Mat& second) {
   GaussianBlur(img1,img1,Size(3,3),0);
   GaussianBlur(img2,img2,Size(3,3),0);
   Mat rtn = abs(img1-img2);
+
   return rtn;
 }
 
-Point2f determineLaserPoint(std::vector<std::vector<Point> >& pts) {
-  Point2f bestPt;
-  double bestRad = 1000;
-  for(int i = 0; i < pts.size(); i++) {
-    std::vector<Point> cur = pts[i];
-    Point2f curPoint;
-    float curRad;
-    minEnclosingCircle(cur,curPoint,curRad);
-    if(curRad < bestRad) {
-      bestPt = curPoint;
-      bestRad = curRad;
-    }
-  }
-  return bestPt;
+Point2f determineLaserPoint(const Mat & frame) {
+  double min = 0;
+  double max = 0;
+  Point minLoc;
+  Point maxLoc;
+  cv::Point min_loc, max_loc;
+  cv::minMaxLoc(frame, &min, &max, &min_loc, &max_loc);
+  return max_loc;
 }
 
 std::vector<std::vector<Point> > findCircleContours (Mat& image) {
@@ -425,16 +413,86 @@ std::vector<std::vector<Point> > findCircleContours (Mat& image) {
   return circles;
 }
 
+void mostRed ( Mat & in) {
+  Vec3b red = Vec3b(255,255,255);
+  Vec3b black = Vec3b(0,0,0);
+  for(int i = 0; i < in.rows; i++) {
+    for(int t = 0; t < in.cols; t++) {
+      Vec3b cur = in.at<Vec3b>(i,t);
+      if(cur[2] > cur[1] && cur[2] > cur[0]) {
+	in.at<Vec3b>(i,t) = red;
+      } else {
+	in.at<Vec3b>(i,t) = black;
+      }
+    }
+  }
+}
+
+Point2f getLaserLoc( Mat& image1,  Mat & image2) {
+  cv::Mat diff = getDiff(image1,image2);
+  imwrite("FirstImg.png",image1);
+  imwrite("SecondImg.png",image2);
+  imwrite("Diff.png",diff);
+  Rect ROI(image1.cols/2,0,100,3*image1.rows/4);
+  Mat grayROI;
+  diff(ROI).copyTo(grayROI);
+  imwrite("Difference.png",grayROI);
+  Mat diffMask;
+  threshold(grayROI,diffMask,12,255,0);
+  Mat other;
+  image1(ROI).copyTo(other);
+  mostRed(other);
+  cvtColor(other,other,CV_BGR2GRAY);
+  Mat totalMask;
+  bitwise_and(other,diffMask,totalMask);
+  Mat onlyLookAt;
+  image1(ROI).copyTo(onlyLookAt,totalMask);
+  cvtColor(onlyLookAt,onlyLookAt,CV_BGR2HSV);
+  Mat hsv[3];
+  split(onlyLookAt,hsv);  
+  double max = 0;
+  double min = 0;
+  Point maxLoc = Point();
+  Point minLoc = Point();
+  minMaxLoc(hsv[2],&min,&max,&minLoc,&maxLoc);
+  /* std::vector<std::vector<Point> > contours;
+  findContours(onlyLookAt,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
+  drawContours(onlyLookAt, contours,-1,Scalar(255),3);
+  //imwrite("OnlyLookAt.jpg",onlyLookAt);
+  std::vector<Point2f > circularContours;
+  Point2f bestPoint(0,(float)(image1.rows));
+  float largestRad = 0;
+  double smallestRatio = 10;
+  for(int i = 0; i < contours.size(); i++) {
+    Point2f center;
+    float rad = 0;
+    minEnclosingCircle(contours[i],center,rad);
+    double ratio = (rad * rad * PI)/contourArea(contours[i]);
+    if(ratio < 2) {
+      circularContours.push_back(center);
+    }
+  }
+  
+  std::cout << circularContours.size() << std::endl;
+  for(int i = 0; i < circularContours.size(); i++) {
+    if(circularContours[i].y < bestPoint.y) {
+      bestPoint = circularContours[i];
+    }
+    }*/
+    return maxLoc;
+}
+
+
 boost::python::list getLaserLocation (char * img1, char * img2, int width, int height) {
  cv::Mat image1(cv::Size(width,height),CV_8UC3,img1,cv::Mat::AUTO_STEP);
  cv::Mat image2(cv::Size(width,height),CV_8UC3,img2,cv::Mat::AUTO_STEP);
- cv::Mat diff = getDiff(image1,image2);
- std::vector<std::vector<Point> > contours = findCircleContours(diff);
- Point pt = determineLaserPoint(contours);
- boost::python::list list;
- list.append(pt.x);
- list.append(pt.y);
- return list;
+ imwrite("Img1.jpg",image1);
+ imwrite("Img2.jpg",image2);
+ Point2f bestPoint = getLaserLoc(image1, image2);
+  boost::python::list rtn;
+  rtn.append(bestPoint.x);
+  rtn.append(bestPoint.y);
+  return rtn;
 }
 
 Mat valThresholding(Mat& val) {
@@ -538,9 +596,7 @@ double calcDistance(double yCoor) {
 double getLaserDist (char * img1, char* img2, int width, int height) {
  cv::Mat image1(cv::Size(width,height),CV_8UC3,img1,cv::Mat::AUTO_STEP);
  cv::Mat image2(cv::Size(width,height),CV_8UC3,img2,cv::Mat::AUTO_STEP);
- cv::Mat diff = getDiff(image1,image2);
- std::vector<std::vector<Point> > contours = findCircleContours(diff);
- Point pt = determineLaserPoint(contours);
+ Point2f pt = getLaserLoc(image1,image2);
  return calcDistance(pt.y);
 }
 
@@ -909,12 +965,204 @@ boost::python::list getBoxCorner(char* img, int width, int height) {
   return rtn;
 }
 
+double calculateSxy (std::vector<double> xVals, std::vector<double> yVal) {
+  double sumX = std::accumulate(xVals.begin(),xVals.end(),0.0);
+  double sumY = std::accumulate(yVal.begin(),yVal.end(),0.0);
+  double sumXY = 0;
+  for(int i = 0; i < xVals.size(); i++) {
+    sumXY += xVals[i]*yVal[i];
+  }
+  return sumXY - (sumX * sumY)/xVals.size();
+}
+
+double calcMean(std::vector<double> vals) {
+  double sum = std::accumulate(vals.begin(),vals.end(),0.0);
+  return sum/vals.size();
+}
+
+
+Point determineConstants(std::vector<double> xVals, std::vector<double> yVal) {
+    std::vector<double> Y(xVals.begin(),xVals.end());
+    for(std::vector<double>::iterator i = yVal.begin(); i < yVal.end(); i++) {
+      Y[i-yVal.begin()]= Y[i-yVal.begin()] * *i;
+    }
+    double Sxy = calculateSxy(xVals,Y);
+    double Sxx = calculateSxy(xVals,xVals);
+    double b1 = Sxy/Sxx;
+    double yBar = calcMean(Y);
+    double xBar = calcMean(xVals);
+    return Point(b1,yBar-b1*xBar);
+    
+}
+
+Mat getWhiteOrRed(const Mat& in) {
+  Mat rtn;
+  in.copyTo(rtn);
+  Vec3b white(255,255,255);
+  Vec3b black(0,0,0);
+  for(int i = 0; i < rtn.rows; i++) {
+    for(int t = 0; t < rtn.cols; t++) {
+      Vec3b cur = rtn.at<Vec3b>(i,t);
+      if(std::abs(cur[0]-cur[1]) < 10 && std::abs(cur[1] - cur[2]) < 10 && std::abs(cur[0]-cur[2]) < 10) {
+		rtn.at<Vec3b>(i,t) = white;
+      } else if (cur[2] - cur[1] > 20 && cur[2] -cur[0] > 20) {
+		rtn.at<Vec3b>(i,t) = white;
+      } else {
+	rtn.at<Vec3b>(i,t) = black;
+      }
+    }
+  }
+  return rtn;
+}
+
+
+void getLaserConstants(boost::python::list xyPairs) {
+  std::vector<double> xVals;
+  std::vector<double> yVals;
+  for( int i = 0; i < boost::python::len(xyPairs); i++) {
+    boost::python::list pt = boost::python::extract<boost::python::list>(xyPairs[i]);
+    xVals.push_back(boost::python::extract<double>(pt[0]));
+    yVals.push_back(boost::python::extract<double>(pt[1]));
+  }
+  Point p  = determineConstants(xVals,yVals);
+  std::cout << "FM " << p.x << std::endl;
+  std::cout << "FB " << p.y << std::endl;
+
+}
+Point getCenter(const std::vector<Point>& vec) {
+  double x = 0;
+  double y =0 ;
+  for(int i = 0; i < vec.size(); i++) {
+    x+=vec[i].x;
+    y+=vec[i].y;
+  }
+  return Point(x/vec.size(),y/vec.size());
+}
+
+std::pair<int,Vec3b> getAverageSize(Mat& in, const Point startPoint, const std::vector<Point>& contour) {
+  Mat other = Mat::zeros(Size(in.cols,in.rows),CV_8UC3);
+  // showImage(other);
+  std::vector<Point> queue;
+  std::vector<Point> lookedAt;
+  Vec3b middleVal = in.at<Vec3b>(startPoint);
+  unsigned int avgR = 0;
+  unsigned int avgG = 0;
+  unsigned int avgB = 0;
+  unsigned int numLooked = 0;
+  int dr[8] = { 0, 1, 1, 1, 0, -1, -1, -1};
+  int dc[8] = { -1, -1, 0, 1, 1, 1, 0, -1};
+  std::vector<int> deltaRow (dr, dr+sizeof(dr)/sizeof(int));
+  std::vector<int> deltaCol (dc, dc+sizeof(dc)/sizeof(int));
+  queue.emplace(queue.begin(),startPoint);
+  Vec3b white(255,255,255);
+  while(queue.size() > 0) {
+    Point cur = Point(queue[queue.size()-1].x, queue[queue.size()-1].y);
+    lookedAt.push_back(cur);
+    queue.pop_back();
+    numLooked++;
+     Vec3b curVal = in.at<Vec3b>(cur);
+     avgB+=curVal[0];
+    avgG+=curVal[1];
+    avgR+=curVal[2];
+    //  std::cout << "START POINT" << cur << std::endl;
+    for(int i = 0; i < deltaRow.size(); i++) {
+      Point neighbor = Point(cur.x+deltaRow[i],cur.y+deltaCol[i]);
+      Vec3b val = in.at<Vec3b>(neighbor);
+      if((std::abs(middleVal[0]-val[0]) >= 10 || std::abs(middleVal[1] - val[1]) >= 10 || std::abs(middleVal[2]-val[2]) >= 10) ||( val[2] < 150))  {
+	 continue;
+       }
+       std::vector<Point>::const_iterator found = std::find(lookedAt.begin(),lookedAt.end(),neighbor);
+	if(found != lookedAt.end()) {
+	  continue;
+	}
+	double insideContour = pointPolygonTest(contour,neighbor,false);
+	if(insideContour > 0){ 
+	  in.at<Vec3b>(neighbor) = Vec3b(0,0,255);
+	  //  circle(other,neighbor,5,Scalar(0,0,255));
+	  queue.push_back(neighbor);;
+	  }
+    }
+  }
+  return std::pair<int,Vec3b>(numLooked, Vec3b(avgB/numLooked, avgG/numLooked, avgR/numLooked));
+} 
+
+
+Point getLaserDotLoc(Mat& laser) {
+  Mat beforeMask;
+  Mat bgr[3];
+  Rect ROI(laser.cols/2 - 25, 0, 200,800);
+  beforeMask = laser(ROI);
+  Mat redAndWhite = getWhiteOrRed(beforeMask);
+  // showImage(redAndWhite);
+  Mat black;
+  Mat smallerLaser;
+  beforeMask.copyTo(smallerLaser);
+  beforeMask.copyTo(black);
+  cvtColor(smallerLaser,smallerLaser,CV_BGR2GRAY);
+  Canny(smallerLaser,smallerLaser,50,50);
+  
+  std::vector<std::vector<Point> > contours;
+  std::vector<std::vector<Point> > keep;
+  findContours(smallerLaser,contours,CV_RETR_LIST,CV_CHAIN_APPROX_NONE);
+
+  for(int i = 0; i < contours.size(); i++) {
+    std::vector<Point> approx;
+    if(contourArea(contours[i]) > 2) {
+      keep.push_back(contours[i]);
+    }
+
+  }  
+  for(int i = 0; i < keep.size(); i++) {
+    std::vector<Point> hull;
+    convexHull(keep[i],hull);
+    keep[i] = hull;
+  }
+
+  Point best;
+  Vec3b bestVec;
+  double bestVecVal = 0;
+  std::cout << keep.size() << std::endl;
+  for(int i = 0; i < keep.size(); i++) {
+    Point p = getCenter(keep[i]);
+    Vec3b color = black.at<Vec3b>(p);
+    if(std::abs(color[2] - color[1]) >= 20 || std::abs(color[2] - color[0]) >= 20 || std::abs(color[1] - color[0]) >= 20) { //color[0] < 150 || color[1] < 150 || color[2] < 150) {
+      continue;
+    }
+      std::pair<int, Vec3b>  cur = getAverageSize(black,Point(getCenter(keep[i]).x,getCenter(keep[i]).y),keep[i]);
+      double curVecBest = cur.first;
+      if(curVecBest > bestVecVal) {
+	best = Point(getCenter(keep[i]).x,getCenter(keep[i]).y);
+	bestVec = cur.second;
+	bestVecVal = curVecBest;
+      }
+  }
+  return Point(best.x+ROI.x,best.y);
+}
+
+
+void getLaserDistOneImgLoc(char * img, int width, int height) {
+  cv::Mat laser(cv::Size(width,height),CV_8UC3,img,cv::Mat::AUTO_STEP);
+  Point best = getLaserDotLoc(laser);
+  std::cout << best << std::endl;
+}
+
+
+
+
+double getLaserDistOneImg(char * img, int width, int height) {
+  cv::Mat laser(cv::Size(width,height),CV_8UC3,img,cv::Mat::AUTO_STEP);
+  Point best = getLaserDotLoc(laser);
+  return calcDistance(best.y);
+}
+
+
 
 //This part is what Python can see
 //when the module is imported.
 BOOST_PYTHON_MODULE(DroneUtils) {
   using namespace boost::python;
   def("displayImage",displayImage);
+  def("getLaserConstants",getLaserConstants);
   def("getLaserLocation",getLaserLocation);
   def("getLaserDist",getLaserDist);
   def("getPaperContour",getPaperContour);
@@ -924,5 +1172,7 @@ BOOST_PYTHON_MODULE(DroneUtils) {
   def("paperContour",paperContour);
   def("getAllBoxes",getAllBoxes);
   def("getBoxCorner", getBoxCorner);
+  def("getLaserDistOneImg",getLaserDistOneImg);
+  def("getLaserDistOneImgLoc",getLaserDistOneImgLoc);
 
 }

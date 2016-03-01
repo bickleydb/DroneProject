@@ -11,7 +11,7 @@ import DroneUtils
 ser = serial.Serial('/dev/ttyACM0', 9600, timeout = 0);
 
 def sendCmd(str):
-	#Move Forward
+	#Move Forward -- 1 foot of movment= a modifer value of 60
 	if str == 'w':
 		ser.write('mf0100');
 	#Move Backward
@@ -59,8 +59,13 @@ def sendCmd(str):
         if str == 'p':
                 s = findBox();
 		print s;
+        if str == 'u':
+                ser.write('l00000');
+                takePictures()
+                ser.write('l00000');
+                print("Done")
         if str == 'z':
-                getBoxCorners()
+               	getBoxCorners()
 	#Point laser to right most box
 	if str == 'e':
 		pointToRightBox();
@@ -73,9 +78,6 @@ def sendCmd(str):
 	if str == 'c':
 		automateCalibration();
 		print "Done"
-	#Test motor dist
-	if str == 'v':
-		testMotor();
 	#Quit Program
 	if str == 'quit':
 		ser.close();
@@ -130,6 +132,12 @@ def centerLaser(boxes, laser, direction):
 	else:
 		return;
 
+
+def waitForFrames(cam,num):
+        for i in range(0,num):
+                camera.capture(stream,format='jpeg')
+                
+##################################################################################
 # This method captures and returns two images, taken simultaneously from the same
 # position. One image is taken with the laser, the other without.
 # Returns an array of data for two images, ready to be written to an image file.
@@ -139,44 +147,44 @@ def centerLaser(boxes, laser, direction):
 def toggleLaserPictures():
 	#Setup camera an stuffs
 	camera = PiCamera();
+        camera.brightness = 40
 	camera.resolution = (2592,1944);
-	time.sleep(2);
+	time.sleep(2)
 	stream = io.BytesIO();	
-	
 	#Turn on laser and get first image, captured into a stream
 	ser.write('l00000');
 	time.sleep(2);
-	camera.capture(stream, format='jpeg');
+	camera.capture(stream, format='png');
 	img1Data = np.fromstring(stream.getvalue(), dtype=np.uint8);	
-		
 	stream.close();
 	#Turn off laser and get second image, then read image into a new stream
 	ser.write('l00000');
 	time.sleep(2);
 	stream = io.BytesIO();
-	camera.capture(stream, format='jpeg');
+	camera.capture(stream, format='png');
 	img2Data = np.fromstring(stream.getvalue(), dtype=np.uint8);
-
 	stream.close();	
-	images = [img1Data, img2Data];	
+	images = [img1Data, img2Data];
 	camera.close();
 	return 	images;
 
 def takePictures():
         camera = PiCamera()
+        
+        camera.brightness = 40
         camera.resolution = (2592,1944)
         stream = io.BytesIO()
-        camera.capture(stream,format='jpeg')
+        camera.capture(stream,format='png')
         data = np.fromstring(stream.getvalue(),dtype=np.uint8)
         image = cv2.imdecode(data,1)
-        cv2.imwrite("BoxesAtHighRez.png",image);
+        cv2.imwrite("40brightlaser.png",image);
         camera.close()
         
 def findBox():
         camera = PiCamera()
         camera.resolution = (2592,1944)
         stream= io.BytesIO()
-        camera.capture(stream,format='jpeg')
+        camera.capture(stream,format='png')
         data = np.fromstring(stream.getvalue(),dtype=np.uint8)
         image = cv2.imdecode(data,1)
         stuff = DroneUtils.getAllBoxes(image.tostring('c'), image.shape[1],image.shape[0])
@@ -207,54 +215,162 @@ def getBoxCorners():
         cv2.destroyAllWindows()
         print(lst)
 
-
+##################################################################################
+#  This method uses the robots laser to determine how far away the object it is
+# pointing at is. 
+# @ return  dist -distance in feet
 def getCurDist():
 	images = toggleLaserPictures();
-	img1 = cv2.imdecode(images[0], 1);
-	img2 = cv2.imdecode(images[1], 1);
-	cv2.imwrite("ta.jpeg", img1);
-	cv2.imwrite("tb.jpeg", img2);
-	dist = DroneUtils.getLaserDist(img2.tostring('c'), img1.tostring('c'), img1.shape[1], img1.shape[0]);
+	img1 = cv2.imdecode(images[0],1);
+	#img2 = cv2.imdecode(images[1], 1);
+	#cv2.imwrite("ta.png", img1);
+	#cv2.imwrite("tb.png", img2);
+	dist = DroneUtils.getLaserDistOneImg(img1.tostring('c'), img1.shape[1], img1.shape[0]);
 	return dist;
 
+
+#################################################################################
+#	This method uses the dimensions and ratio of a piece of paper to determine
+# its distance by utilizing its contour lines.
+# @ return dist -distance in feet
 def getPaperDist():
 	images = toggleLaserPictures();
 	img = cv2.imdecode(images[1], 1);
-	cv2.imwrite("t1a.jpeg", img);
+	cv2.imwrite("t1a.png", img);
 	dist = DroneUtils.getPaperDistByCorner(img.tostring('c'), img.shape[1], img.shape[0]);
 	return dist;
 
+
+##################################################################################
+#	This method gets a piece of papers corner points. The first two values in
+# the returned list are the top-right corner of the paper. The next two values are
+# the top-left corner points, the next two are the bottom-left, and the final two
+# are the bottom-right. For each point, the first value is the x-cord and the 2nd
+# is the y-cord.
+# @ return pointList  -List of points in the image where the papers corners are.
+def getPaperPoints():
+	images = toggleLaserPictures();
+	img = cv2.imdecode(images[1], 1);
+	cv2.imwrite("crnrs.png",img);
+	#pointList = DroneUtils.getPaperByCorner(img.tostring('c'), img.shape[1], img.shape[0]);
+	pointList = DroneUtils.paperContour(img.tostring('c'), img.shape[1], img.shape[0]);
+	return pointList;
+
+
+##################################################################################
+#	This method returns the x,y position of the laser within the image. The
+# first value in the list is the laser's x-cord. and the second is the y-cord.
+# @ return pos  - Point of the laser
+# 	pos[0] - x
+#	pos[1] - y
 def getLaserPos():
 	images = toggleLaserPictures();
 	img1 = cv2.imdecode(images[0], 1);
-	img2 = cv2.imdecode(images[1], 1);
-	cv2.imwrite("t1.jpeg", img1);
-	cv2.imwrite("t2.jpeg", img2);
-	pos = DroneUtils.getLaserLocation(img1.tostring('c'), img2.tostring('c'), img1.shape[1], img1.shape[0]);
-	return pos;	
+	#img2 = cv2.imdecode(images[1], 1);
+	#cv2.imwrite("t1.png", img1);
+	#cv2.imwrite("t2.png", img2);
+        cv2.imwrite('test.png',img1)
+        DroneUtils.getLaserDistOneImgLoc(img1.tostring('c'), img1.shape[1], img1.shape[0]);
+	#return pos;	
 
+
+##################################################################################
+#	This method moves the robot in 5 foot increments, taking two images of its
+# target object at every 5 feet. One image is with the laser on, and the other w/o
+# This method periodically checks to make sure the target object is within its img
+# This method is complete once the ro bot has moved within 5 feet of the target.
 def automateCalibration():
-	distToPaper = getPaperDist();
-	print (distToPaper);
+	#Get intial distance to paper
+	distToPaper = getCurDist();
+	print ("Current distance is %02d" % distToPaper);
 	while (distToPaper > 5):
+		#Take images of paper
+		print ("Taking imagery... ");
 		images = toggleLaserPictures();
 		img1 = cv2.imdecode(images[0], 1);
 		img2 = cv2.imdecode(images[1], 1);
-		cv2.imwrite('%02d_withLaser.jpeg' % distToPaper, img1);
-		cv2.imwrite('%02d_withOut.jpeg' % distToPaper, img2);
-		ser.write('mf0100');
-		distToPaper = getPaperDist();
-		print(distToPaper);
+		cv2.imwrite('%02d_withLaser.png' % distToPaper, img1);
+		cv2.imwrite('%02d_withOut.png' % distToPaper, img2);
+
+		#Advance the robot 5 feet (60*5=300)
+		print ("Advancing robots position..");
+		ser.write('mf0300');
+
+		#Get the points of paper
+		print ("Getting coordinates of paper... ");
+		pts = getPaperPoints();
+
+		#Center laser/camera
+		centerLaser(pts);
+
+		#Get new distance to paper
+		distToPaper = getCurDist();
+		print("Current distance is %02d" % distToPaper);
 	return;
 
-def testMotor():
-	distToPaper = getPaperDist();
-	print ("Initial Dist: ", distToPaper);
-	ser.write('mf0100');
-	time.sleep(2);
-	distToPaper = getPaperDist();
-	print ("Dist. after: ", distToPaper);
-	return;
+
+##################################################################################
+#	This method can be called to ensure that the robots laser and camera are
+# pointed somewhere within the given bounds of an image. This method will first 
+# get the robots horizontal servo centered, and then the vertical.
+def centerLaser(bounds):
+	xMax = getMax(bounds[0], bounds[4]); 
+	xMin = getMin(bounds[2], bounds[6]);
+	yMax = getMax(bounds[5], bounds[7]);
+	yMin = getMin(bounds[1], bounds[3]);
+	centeredH = False;
+	centeredV = False;
+	#Center horizontal
+	print "Centering camera/laser horizontally... ";
+	while not(centeredH):
+		lzrPts = getLaserPos();
+		lzrX = lzrPts[0];
+		lzrY = lzrPts[1];
+		#if laser is too far left, move it right
+		if (xMax > lzrX and lzrX < xMin):
+			ser.write('sr0001');
+		#if laser is too far right, move it left
+		if (xMax < lzrX and lzrX > xMin):
+			ser.write('sl0001');
+		else:
+			centeredH = True;
+	#Center vertical
+	print "Centering camera/laser vertically...";
+	while not(centeredV):
+		lzrPts = getLaserPos();
+		lzrX = lzrPts[0];
+		lzrY = lzrPts[1];
+		#if laser is too high, move it down
+		if (yMax > lzrY and lzrY < yMin):
+			ser.write('sd0001');
+			ser.write('sd0001');
+		#if laser is too low, move it up	
+		if (yMax < lzrY and lzrY > yMin):
+			ser.write('su0001');
+			ser.write('su0001');
+		else:
+			centeredV = True;
+
+
+##################################################################################
+# Helper method to return the max value of two given numbers.
+def getMax(a, b):
+	if (a > b):
+		return a;
+	else:
+		return b;
+
+##################################################################################
+# Helper method to return the min value of two given numbers.
+def getMin(a, b):
+	if (a<b):
+		return a;
+	else:
+		return b;
+
+
+##################################################################################
+##################################################################################
 
 print "Now controlling the Ground Robot"
 print "------------------------------------------------------------"
@@ -280,6 +396,7 @@ print " t = Get position of laser"
 print " p = Find boxes"
 print " q = Point laser to left most box"
 print " e = Point laser to right most box"
+print " c = calibrate lzr"
 print " "
 print "------------------------------------------------------------"
 print "Type 'quit' to exit the program"
