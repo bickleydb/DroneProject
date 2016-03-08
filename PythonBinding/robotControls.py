@@ -1,4 +1,5 @@
 from picamera import PiCamera
+from fractions import Fraction
 import picamera.array
 import sys
 import serial
@@ -11,18 +12,24 @@ import DroneUtils
 ser = serial.Serial('/dev/ttyACM0', 9600, timeout = 0);
 
 def sendCmd(str):
-	#Move Forward -- 1 foot of movment= a modifer value of 60
+# To move the robot a specific distance, just include it as the modifer value
+# To move the robot 1 foot, send mf0001.
+# To move the robot 10 feet, send mf0010.
+	#Move Forward
 	if str == 'w':
-		ser.write('mf0100');
+		ser.write('mf0001');
 	#Move Backward
 	if str == 's':
-		ser.write('mb0100');
+		ser.write('mb0001');
+# For 360 degree turns, send the modifer value 360
+# For 180 degree turns, send the modifer value 180
+# Degree turns can be 360, 180, 90, 45, and 20 degrees
 	#Turn Left
 	if str == 'a':
-		ser.write('ml0090');
+		ser.write('ml0045');
 	#Turn Right
 	if str == 'd':
-	 	ser.write('mr0090');
+	 	ser.write('mr0045');
 	#Laser Toggle
 	if str == 'f':
 		ser.write('l00000');
@@ -75,6 +82,8 @@ def sendCmd(str):
 		pointToLeftBox();
 		print "I found the left box!"
 	#Testrun
+        if str == '.':
+                takeOnePicture()
 	if str == 'c':
 		automateCalibration();
 		print "Done"
@@ -147,9 +156,10 @@ def waitForFrames(cam,num):
 def toggleLaserPictures():
 	#Setup camera an stuffs
 	camera = PiCamera();
-        camera.brightness = 40
-	camera.resolution = (2592,1944);
-	time.sleep(2)
+        camera.brightness = 30
+	camera.resolution = (2592,1944)
+        camera.awb_mode='incandescent'
+	#time.sleep(2)
 	stream = io.BytesIO();	
 	#Turn on laser and get first image, captured into a stream
 	ser.write('l00000');
@@ -168,16 +178,59 @@ def toggleLaserPictures():
 	camera.close();
 	return 	images;
 
-def takePictures():
+#Same as above^
+def laserOnOffPictures():
+	camera = PiCamera()
+	camera.resolution = (2592, 1944)
+	stream = ioBytesIO()
+	#Laser on, picture time
+	ser.write('100000')
+	time.sleep(2)
+	camera.capture(stream, format='png')
+	img1Data = np.fromstring(stream.getvalue(), dtype=np.uint8)
+	stream.close();
+	#Laser off, picture time
+	ser.write('l00000')
+	time.sleep(1)
+	stream = io.BytesIO()
+	camera.capture(stream, format='png')
+	img2Data = np.fromstring(stream.getvalue(), dtype=np.uint8)
+	stream.close()
+	images = [img1Data, img2Data]
+	camera.close()
+	return images
+
+# DO NOT MESS WITH THIS PLZ
+#SRSLY NEED FOR LAZAR
+# LIKE SERIOUISLY DONT TOUCH IT EVER
+# but........ okay.
+def takeOnePicture():
         camera = PiCamera()
-        
-        camera.brightness = 40
+        camera.brightness = 30
+       # camera.led = False
+        camera.awb_mode='incandescent'
+        #camera.awb_gains = (Fraction(295,256), Fraction(515, 256))
         camera.resolution = (2592,1944)
         stream = io.BytesIO()
         camera.capture(stream,format='png')
         data = np.fromstring(stream.getvalue(),dtype=np.uint8)
         image = cv2.imdecode(data,1)
-        cv2.imwrite("40brightlaser.png",image);
+        cv2.imwrite("OnePic.png",image);
+        print(camera.awb_gains);
+        camera.close()
+        print("done")
+
+
+def takePictures():
+        camera = PiCamera()
+        for i in range(0, 20):
+                camera.brightness = i*5
+                camera.resolution = (2592,1944)
+                stream = io.BytesIO()
+                camera.capture(stream,format='png')
+                data = np.fromstring(stream.getvalue(),dtype=np.uint8)
+                image = cv2.imdecode(data,1)
+                cv2.imwrite(str(i*2) + "brightlaser.png",image);
         camera.close()
         
 def findBox():
@@ -234,7 +287,7 @@ def getCurDist():
 # its distance by utilizing its contour lines.
 # @ return dist -distance in feet
 def getPaperDist():
-	images = toggleLaserPictures();
+	images = laserTogglePictures();
 	img = cv2.imdecode(images[1], 1);
 	cv2.imwrite("t1a.png", img);
 	dist = DroneUtils.getPaperDistByCorner(img.tostring('c'), img.shape[1], img.shape[0]);
@@ -249,7 +302,7 @@ def getPaperDist():
 # is the y-cord.
 # @ return pointList  -List of points in the image where the papers corners are.
 def getPaperPoints():
-	images = toggleLaserPictures();
+	images = laserTogglePictures();
 	img = cv2.imdecode(images[1], 1);
 	cv2.imwrite("crnrs.png",img);
 	#pointList = DroneUtils.getPaperByCorner(img.tostring('c'), img.shape[1], img.shape[0]);
@@ -266,9 +319,6 @@ def getPaperPoints():
 def getLaserPos():
 	images = toggleLaserPictures();
 	img1 = cv2.imdecode(images[0], 1);
-	#img2 = cv2.imdecode(images[1], 1);
-	#cv2.imwrite("t1.png", img1);
-	#cv2.imwrite("t2.png", img2);
         cv2.imwrite('test.png',img1)
         DroneUtils.getLaserDistOneImgLoc(img1.tostring('c'), img1.shape[1], img1.shape[0]);
 	#return pos;	
@@ -286,15 +336,15 @@ def automateCalibration():
 	while (distToPaper > 5):
 		#Take images of paper
 		print ("Taking imagery... ");
-		images = toggleLaserPictures();
+		images = laserOnOffPictures();
 		img1 = cv2.imdecode(images[0], 1);
 		img2 = cv2.imdecode(images[1], 1);
 		cv2.imwrite('%02d_withLaser.png' % distToPaper, img1);
 		cv2.imwrite('%02d_withOut.png' % distToPaper, img2);
 
-		#Advance the robot 5 feet (60*5=300)
+		#Advance the robot 5 feet
 		print ("Advancing robots position..");
-		ser.write('mf0300');
+		ser.write('mf0005');
 
 		#Get the points of paper
 		print ("Getting coordinates of paper... ");

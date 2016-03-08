@@ -49,12 +49,10 @@ std::vector<KeyPoint> findPaperCornerBased (Mat frame, double avgBright) {
 	 double dc[8] = { 1, 1,  0, -1,-1,-1, 0, 1};
 	 std::vector<int> deltaRow (dr, dr+sizeof(dr)/sizeof(int));
 	 std::vector<int> deltaCol (dc, dc+sizeof(dc)/sizeof(int));
-  	  
 	 for(unsigned int i = 0; i < deltaRow.size(); i++) {
 	   KeyPoint delta = pt; //Start with the keypoint we are looking at
 	   int rowAdd = offset; //Save the offset
 	   int colAdd = offset;
-	  
 	   delta.pt.x = pt.pt.x + (int) (deltaRow[i] * rowAdd); //Offset the coordinates
 	   delta.pt.y = pt.pt.y + (int) (deltaCol[i] * colAdd);
 
@@ -99,7 +97,6 @@ std::vector<KeyPoint> findPaperCornerBased (Mat frame, double avgBright) {
 	    colored.at<Vec3b>(delta.pt)[2] = 255;
 	  }
 	   ////////////////////////////////////////////////////////
-
 	}  
 
 	 //If the keypoint we are looking at does not have 5 red neighbors and 3 white, we don't want it
@@ -1090,53 +1087,116 @@ std::pair<int,Vec3b> getAverageSize(Mat& in, const Point startPoint, const std::
 Point getLaserDotLoc(Mat& laser) {
   Mat beforeMask;
   Mat bgr[3];
-  Rect ROI(laser.cols/2 - 25, 0, 200,800);
+  Rect ROI(laser.cols/2 - 25, 0, 200,laser.rows);
   beforeMask = laser(ROI);
   Mat redAndWhite = getWhiteOrRed(beforeMask);
-  // showImage(redAndWhite);
   Mat black;
   Mat smallerLaser;
   beforeMask.copyTo(smallerLaser);
   beforeMask.copyTo(black);
   cvtColor(smallerLaser,smallerLaser,CV_BGR2GRAY);
+  GaussianBlur(smallerLaser,smallerLaser,Size(7,7),0);
   Canny(smallerLaser,smallerLaser,50,50);
-  
+  Mat save;
+  smallerLaser.copyTo(save);
   std::vector<std::vector<Point> > contours;
   std::vector<std::vector<Point> > keep;
   findContours(smallerLaser,contours,CV_RETR_LIST,CV_CHAIN_APPROX_NONE);
-
+  drawContours(smallerLaser,contours,-1,Scalar(255),1);
   for(int i = 0; i < contours.size(); i++) {
     std::vector<Point> approx;
+    approxPolyDP(contours[i],approx,5,true);
     if(contourArea(contours[i]) > 2) {
       keep.push_back(contours[i]);
-    }
-
-  }  
+    } 
+  }
   for(int i = 0; i < keep.size(); i++) {
     std::vector<Point> hull;
     convexHull(keep[i],hull);
     keep[i] = hull;
   }
-
   Point best;
   Vec3b bestVec;
   double bestVecVal = 0;
   std::cout << keep.size() << std::endl;
+  std::vector<std::vector<Point> > lastStage;
   for(int i = 0; i < keep.size(); i++) {
     Point p = getCenter(keep[i]);
     Vec3b color = black.at<Vec3b>(p);
-    if(std::abs(color[2] - color[1]) >= 20 || std::abs(color[2] - color[0]) >= 20 || std::abs(color[1] - color[0]) >= 20) { //color[0] < 150 || color[1] < 150 || color[2] < 150) {
+    if(arcLength(keep[i],true) > 200) {
       continue;
     }
-      std::pair<int, Vec3b>  cur = getAverageSize(black,Point(getCenter(keep[i]).x,getCenter(keep[i]).y),keep[i]);
-      double curVecBest = cur.first;
-      if(curVecBest > bestVecVal) {
-	best = Point(getCenter(keep[i]).x,getCenter(keep[i]).y);
-	bestVec = cur.second;
-	bestVecVal = curVecBest;
-      }
+    std::pair<int, Vec3b>  cur = getAverageSize(black,Point(getCenter(keep[i]).x,getCenter(keep[i]).y),keep[i]);
+    double goodVal = cur.second[2];
+    if(goodVal > 100 ) {
+      lastStage.push_back(keep[i]);
+    }
   }
-  return Point(best.x+ROI.x,best.y);
+
+  double bestRatio = 0;
+  Point bestPoint = Point(-1,-1);
+  for(int i = 0; i < lastStage.size(); i++) {
+    Rect cur = boundingRect(lastStage[i]);
+    cur.x += ROI.x;
+    cur.x -= cur.width/2;
+    cur.width += cur.width;
+    if(cur.x + cur.width > laser.cols) {
+      cur.width = laser.cols - cur.x;
+    }
+    cur.y -= cur.height/2;
+    if(cur.y < 0) {
+      cur.y = 0;
+    }
+    cur.height += cur.height;
+    Mat contour = laser(cur);
+    cvtColor(contour,contour,CV_BGR2GRAY);
+    GaussianBlur(contour,contour,Size(7,7),0);
+    Canny(contour,contour,50,150);
+    std::vector<std::vector<Point> > stuff;
+    findContours(contour,stuff,CV_RETR_LIST,CV_CHAIN_APPROX_NONE);
+    for(int i = 0; i < stuff.size(); i++) {
+      float rad = 0;
+      Point2f cent;
+      minEnclosingCircle(stuff[i],cent,rad);
+      if(contourArea(stuff[i])/(rad * rad * PI) > 0.70 && contourArea(stuff[i])/(rad * rad * PI) > bestRatio) {
+	bestPoint = Point((int)cent.x + cur.x, (int)cent.y + cur.y);
+	bestRatio = contourArea(stuff[i])/(rad * rad * PI);
+      }
+    }
+  }
+  if(bestPoint.x == -1 && bestPoint.y == -1) {
+    for(int i = 0; i < lastStage.size(); i++) {
+    Rect cur = boundingRect(lastStage[i]);
+    cur.x += ROI.x;
+    cur.x -= cur.width/2;
+    cur.width += cur.width;
+    if(cur.x + cur.width > laser.cols) {
+      cur.width = laser.cols - cur.x;
+    }
+    cur.y -= cur.height/2;
+    if(cur.y < 0) {
+      cur.y = 0;
+    }
+    cur.height += cur.height;
+    Mat contour = laser(cur);
+    int numRed = 0;
+    for(int t = 0; t < contour.rows; t++) {
+      for(int q = 0; q < contour.cols; q++) {
+	Vec3b thisColor = contour.at<Vec3b>(t,q);
+	if((thisColor[2] - thisColor[1] > 50 && thisColor[2] - thisColor[0] > 50) && thisColor[1] < 100) {
+	  numRed++;
+	}
+      }
+    }
+    double ratioOfRedToNot = (double)(numRed) / (contour.rows * contour.cols);
+    if(ratioOfRedToNot > bestRatio) {
+      bestRatio = ratioOfRedToNot;
+      bestPoint = getCenter(lastStage[i]);
+      bestPoint.x += ROI.x;
+      }
+    }
+  }
+  return Point(bestPoint.x+ROI.x,bestPoint.y);
 }
 
 
@@ -1155,6 +1215,23 @@ double getLaserDistOneImg(char * img, int width, int height) {
   return calcDistance(best.y);
 }
 
+double getLaserLocTest(char * img1, char* img2 , int width, int height) {
+  cv::Mat laser(cv::Size(width,height),CV_8UC3,img1,cv::Mat::AUTO_STEP);
+  cv::Mat noLaser(cv::Size(width,height),CV_8UC3,img2,cv::Mat::AUTO_STEP);
+  Mat grayLaser;
+  cvtColor(laser,grayLaser,CV_BGR2GRAY);
+  cvtColor(noLaser,noLaser,CV_BGR2GRAY);
+  Mat mask;
+  Mat goodStuff;
+  absdiff(grayLaser,noLaser,mask);
+  threshold(mask,mask,0,255,0);
+  Mat doWorkOn;
+  laser.copyTo(doWorkOn,mask);
+  Point best = getLaserDotLoc(doWorkOn);
+  std::cout << best.x << "," << best.y << std::endl;
+}
+
+
 
 
 //This part is what Python can see
@@ -1162,6 +1239,7 @@ double getLaserDistOneImg(char * img, int width, int height) {
 BOOST_PYTHON_MODULE(DroneUtils) {
   using namespace boost::python;
   def("displayImage",displayImage);
+  def("getLaserLocTest",getLaserLocTest);
   def("getLaserConstants",getLaserConstants);
   def("getLaserLocation",getLaserLocation);
   def("getLaserDist",getLaserDist);

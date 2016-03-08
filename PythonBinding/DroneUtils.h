@@ -35,9 +35,9 @@
 #define HIGH_RED 5
 #define FOCAL_LENGTH 216.79
 #define PAPER_AR 8.5/11.0
-#define FM 568.356
+#define FM 834.906
 #define BOX_AR 44.5/22.5
-#define FB 254.732
+#define FB 235.398
 
 using namespace cv;
 using namespace std;
