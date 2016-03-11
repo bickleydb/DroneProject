@@ -21,12 +21,15 @@
 #include <random>
 #include <algorithm>
 #include <thread>
+#include <queue>
+#include <unordered_set>
+#include <tuple>
 
 #define LOW_RED  0
 #define HIGH_RED  5
 #define FOCAL_LENGTH 216.79
-#define FM 667.88
-#define FB 257.00
+#define FM 667.486
+#define FB 249.991
 #define PI 3.141592653589793238462643383279502884197169399375105820974944592307816406286 
 #define BOX_AR 44.5/22.5
 
@@ -189,25 +192,25 @@ std::vector<KeyPoint> findPaper(Mat& frame) {
 
 
 Point getLaserLocation(Mat& frame) {
-   cvtColor(frame,frame,CV_GRAY2BGR);
-   equalizeHist(frame,frame);
-   showImage(frame);
-   threshold(frame,frame,1,255,0);
-   showImage(frame);
+  //cvtColor(frame,frame,CV_GRAY2BGR);
+   // equalizeHist(frame,frame);
+   // showImage(frame);
+   //threshold(frame,frame,1,255,0);
+   //showImage(frame);
   //showImage(frame);
   // Canny(frame,frame,50,150);
   // showImage(frame);
 
 
-  /*double min = 0;
+  double min = 0;
   double max = 0;
   Point minLoc;
   Point maxLoc;
   cv::Point min_loc, max_loc;
-cv::minMaxLoc(frame, &min, &max, &min_loc, &max_loc);
- threshold(frame,frame,max-5,0,3);
- showImage(frame);
-	   return max_loc;
+  cv::minMaxLoc(frame, &min, &max, &min_loc, &max_loc);
+  threshold(frame,frame,max-5,0,3);
+  showImage(frame);
+  return max_loc;
   //  minMaxLoc(frame,min,max,minLoc,maxLoc);
   /*for(int i = 0; i < frame.rows; i++) {
     for(int t = 0; t < frame.cols; t++) {
@@ -259,10 +262,11 @@ Mat getDiff (Mat first, Mat second) {
 
 
 double calcDistance(double yCoor) {
+  std::cout << "Y COOR " << yCoor << std::endl;
   double z = FB;
-  std::cout << z << std::endl;
+  std::cout << "FB" << z << std::endl;
   double denom = (yCoor - FM);
-  std::cout << denom << std::endl;
+  std::cout << "yc -fm" << denom << std::endl;
   z = z / denom;
   return z;
 
@@ -947,22 +951,349 @@ std::vector<Point> findBoxCorner (Mat& color) {
   return corners;
 }
 
+void mostRed ( Mat & in) {
+  Vec3b red = Vec3b(255,255,255);
+  Vec3b black = Vec3b(0,0,0);
+  for(int i = 0; i < in.rows; i++) {
+    for(int t = 0; t < in.cols; t++) {
+      Vec3b cur = in.at<Vec3b>(i,t);
+      if(cur[2] > cur[1] && cur[2] > cur[0]) {
+	in.at<Vec3b>(i,t) = red;
+      } else {
+	in.at<Vec3b>(i,t) = black;
+      }
+    }
+  }
+ 
+}
 
+void keepColIf( Mat & rtn) {
+ Mat rowBlack = Mat::zeros(rtn.rows,1,CV_8UC3);
+  for(int i = 0; i < rtn.cols; i++) {
+    Mat rtnRow = rtn.col(i);
+    bool hasBrightSpot = false;
+    for(int t = 0; t < rtnRow.rows; t++) {
+      Vec3b cur = rtnRow.at<Vec3b>(t,0);
+      if(cur[0] > 200 && cur[1] > 200 && cur[2] > 200) {
+	hasBrightSpot = true;
+      }
+    }
+    if(!hasBrightSpot) {
+      rowBlack.copyTo(rtnRow);
+    }
+  }
+}
+
+
+
+
+
+void keepRowIf ( Mat& rtn) {
+  Mat rowBlack = Mat::zeros(1,rtn.cols,CV_8UC3);
+  for(int i = 0; i < rtn.rows; i++) {
+    Mat rtnRow = rtn.row(i);
+    bool hasBrightSpot = false;
+    for(int t = 0; t < rtnRow.cols; t++) {
+      Vec3b cur = rtnRow.at<Vec3b>(0,t);
+      if(cur[0] > 200 && cur[1] > 200 && cur[2] > 200) {
+	hasBrightSpot = true;
+      }
+    }
+    if(!hasBrightSpot) {
+      rowBlack.copyTo(rtnRow);
+    }
+  }
+}
+
+
+Mat getWhiteOrRed(const Mat& in) {
+  Mat rtn;
+  in.copyTo(rtn);
+  Vec3b white(255,255,255);
+  Vec3b black(0,0,0);
+    for(int i = 0; i < rtn.rows; i++) {
+    for(int t = 0; t < rtn.cols; t++) {
+      Vec3b cur = rtn.at<Vec3b>(i,t);
+      if(std::abs(cur[0]-cur[1]) < 10 && std::abs(cur[1] - cur[2]) < 10 && std::abs(cur[0]-cur[2]) < 10) {
+		rtn.at<Vec3b>(i,t) = white;
+      } else if (cur[2] - cur[1] > 20 && cur[2] -cur[0] > 20) {
+		rtn.at<Vec3b>(i,t) = white;
+      } else {
+	rtn.at<Vec3b>(i,t) = black;
+      }
+    }
+    }
+  return rtn;
+}
+
+Point getCenter(const std::vector<Point>& vec) {
+  double x = 0;
+  double y =0 ;
+  for(int i = 0; i < vec.size(); i++) {
+    x+=vec[i].x;
+    y+=vec[i].y;
+  }
+  return Point(x/vec.size(),y/vec.size());
+}
+
+std::pair<int,Vec3b> getAverageSize(Mat& in, const Point startPoint, const std::vector<Point>& contour) {
+  Mat other = Mat::zeros(Size(in.cols,in.rows),CV_8UC3);
+  //std::cout << "Contour starting at " << startPoint << std::endl;
+  // showImage(other);
+  std::vector<Point> queue;
+  std::vector<Point> lookedAt;
+  Vec3b middleVal = in.at<Vec3b>(startPoint);
+  unsigned int avgR = 0;
+  unsigned int avgG = 0;
+  unsigned int avgB = 0;
+  unsigned int numLooked = 0;
+  int dr[8] = { 0, 1, 1, 1, 0, -1, -1, -1};
+  int dc[8] = { -1, -1, 0, 1, 1, 1, 0, -1};
+  std::vector<int> deltaRow (dr, dr+sizeof(dr)/sizeof(int));
+  std::vector<int> deltaCol (dc, dc+sizeof(dc)/sizeof(int));
+  queue.emplace(queue.begin(),startPoint);
+  Vec3b white(255,255,255);
+  while(queue.size() > 0) {
+    Point cur = Point(queue[queue.size()-1].x, queue[queue.size()-1].y);
+    lookedAt.push_back(cur);
+    queue.pop_back();
+    numLooked++;
+     Vec3b curVal = in.at<Vec3b>(cur);
+     //   std::cout << curVal << std::endl;
+     avgB+=curVal[0];
+    avgG+=curVal[1];
+    avgR+=curVal[2];
+    //  std::cout << "START POINT" << cur << std::endl;
+    for(int i = 0; i < deltaRow.size(); i++) {
+      Point neighbor = Point(cur.x+deltaRow[i],cur.y+deltaCol[i]);
+      Vec3b val = in.at<Vec3b>(neighbor);
+      if((std::abs(middleVal[0]-val[0]) >= 10 || std::abs(middleVal[1] - val[1]) >= 10 || std::abs(middleVal[2]-val[2]) >= 10) ||( val[2] < 100))  {
+	 continue;
+       }
+       std::vector<Point>::const_iterator found = std::find(lookedAt.begin(),lookedAt.end(),neighbor);
+	if(found != lookedAt.end()) {
+	  continue;
+	}
+	double insideContour = pointPolygonTest(contour,neighbor,false);
+	if(insideContour > 0){ 
+	  // in.at<Vec3b>(neighbor) = Vec3b(255,0,255);
+	  //  circle(other,neighbor,5,Scalar(0,0,255));
+	  queue.push_back(neighbor);
+	  }
+    }
+  }
+  //  std::cout << std::endl << std::endl;
+  //howImage(in);
+  return std::pair<int,Vec3b>(numLooked, Vec3b(avgB/numLooked, avgG/numLooked, avgR/numLooked));
+} 
+
+
+std::pair<double, double> getWidthHeight (std::vector<Point> contour) {
+  double high = -1;
+  double low = 10000;
+  double left = 10000;
+  double right = -1;
+  for(int i = 0; i < contour.size(); i++) {
+    if(contour[i].x < left) {
+      left = contour[i].x;
+    } 
+    if (contour[i].x > right) {
+      right = contour[i].x;
+    }
+    if(contour[i].y < low) {
+      low = contour[i].y;
+    } 
+    if (contour[i].y > high) {
+      high = contour[i].y;
+    }
+
+  }
+  return std::pair<double,double>(std::abs(left-right),std::abs(high-low));
+}
 
 int main() {
-  /*   std::string laserStr = "17foot_BothBoxes.png";
-   std::string wolaser = "17foot_BothBoxeswithLaser.png";
+  std::string laserStr = "/home/daniel/DroneProject/RangePictures/test.png";
+  Mat laser = imread(laserStr);
+  Mat beforeMask;
+  Mat bgr[3];
+  Rect ROI(laser.cols/2 - 25, 0, 200,laser.rows);
+  beforeMask = laser(ROI);
+  Mat redAndWhite = getWhiteOrRed(beforeMask);
+  Mat black;
+  Mat smallerLaser;
+  beforeMask.copyTo(smallerLaser);
+  beforeMask.copyTo(black);
+  cvtColor(smallerLaser,smallerLaser,CV_BGR2GRAY);
+  GaussianBlur(smallerLaser,smallerLaser,Size(7,7),0);
+  Canny(smallerLaser,smallerLaser,50,50);
+  Mat save;
+  smallerLaser.copyTo(save);
+  std::vector<std::vector<Point> > contours;
+  std::vector<std::vector<Point> > keep;
+  findContours(smallerLaser,contours,CV_RETR_LIST,CV_CHAIN_APPROX_NONE);
+  drawContours(smallerLaser,contours,-1,Scalar(255),1);
+  for(int i = 0; i < contours.size(); i++) {
+    std::vector<Point> approx;
+    approxPolyDP(contours[i],approx,5,true);
+    if(contourArea(contours[i]) > 2) {
+      keep.push_back(contours[i]);
+    } 
+  }
+  for(int i = 0; i < keep.size(); i++) {
+    std::vector<Point> hull;
+    convexHull(keep[i],hull);
+    keep[i] = hull;
+  }
+  Point best;
+  Vec3b bestVec;
+  double bestVecVal = 0;
+  std::cout << keep.size() << std::endl;
+  std::vector<std::vector<Point> > lastStage;
+  for(int i = 0; i < keep.size(); i++) {
+    Point p = getCenter(keep[i]);
+    Vec3b color = black.at<Vec3b>(p);
+    if(arcLength(keep[i],true) > 200) {
+      continue;
+    }
+    std::pair<int, Vec3b>  cur = getAverageSize(black,Point(getCenter(keep[i]).x,getCenter(keep[i]).y),keep[i]);
+    double goodVal = cur.second[2];
+    std::cout << goodVal << std::endl;
+
+    if(goodVal >= 40 ) {
+      lastStage.push_back(keep[i]);
+    }
+  }
+  std::vector<std::vector<Point> > goodOnes;
+  double bestRatio = 0;
+  Point bestPoint = Point(-1,-1);
+  for(int i = 0; i < lastStage.size(); i++) {
+    Rect cur = boundingRect(lastStage[i]);
+    cur.x += ROI.x;
+    cur.x -= cur.width/2;
+    cur.width += cur.width;
+    if(cur.x + cur.width > laser.cols) {
+      cur.width = laser.cols - cur.x;
+    }
+    cur.y -= cur.height/2;
+    if(cur.y < 0) {
+      cur.y = 0;
+    }
+    cur.height += cur.height;
+    Mat contour = laser(cur);
+    cvtColor(contour,contour,CV_BGR2GRAY);
+    GaussianBlur(contour,contour,Size(7,7),0);
+    Canny(contour,contour,50,150);
+    std::vector<std::vector<Point> > stuff;
+    findContours(contour,stuff,CV_RETR_LIST,CV_CHAIN_APPROX_NONE);
+    for(int i = 0; i < stuff.size(); i++) {
+      float rad = 0;
+      Point2f cent;
+      minEnclosingCircle(stuff[i],cent,rad);
+      if(contourArea(stuff[i])/(rad * rad * PI) > 0.75 && contourArea(stuff[i])/(rad * rad * PI) > bestRatio) {
+	bestPoint = Point((int)cent.x + cur.x, (int)cent.y + cur.y);
+	bestRatio = contourArea(stuff[i])/(rad * rad * PI);
+      }
+    }
+  }
+  std::cout << lastStage.size() << std::endl;
+  if(bestPoint.x == -1 && bestPoint.y == -1) {
+    for(int i = 0; i < lastStage.size(); i++) {
+    Rect cur = boundingRect(lastStage[i]);
+    cur.x += ROI.x;
+    cur.x -= cur.width/2;
+    cur.width += cur.width;
+    if(cur.x + cur.width > laser.cols) {
+      cur.width = laser.cols - cur.x;
+    }
+    cur.y -= cur.height/2;
+    if(cur.y < 0) {
+      cur.y = 0;
+    }
+    cur.height += cur.height;
+    Mat contour = laser(cur);
+    showImage(contour);
+    int numRed = 0;
+    int numSat = 0;
+    for(int t = 0; t < contour.rows; t++) {
+      for(int q = 0; q < contour.cols; q++) {
+	Vec3b thisColor = contour.at<Vec3b>(t,q);
+	if((thisColor[2] - thisColor[1] > 50 && thisColor[2] - thisColor[0] > 50) && thisColor[1] < 100) {
+	  numRed++;
+	}
+	if((thisColor[2] > 200 && thisColor[1] > 200 && thisColor[0] > 200)) {
+	  numSat++;
+	}
+      }
+    }
+    double ratioOfRedToNot = (double)(numRed) / (contour.rows * contour.cols - numSat);
+    if(ratioOfRedToNot > bestRatio) {
+      goodOnes.push_back(lastStage[i]);
+      bestRatio = ratioOfRedToNot;
+      bestPoint = getCenter(lastStage[i]);
+       bestPoint.x += ROI.x;
+      }
+    }
+  }
+  std::cout << goodOnes.size() << std::endl;
+  circle(laser,bestPoint,20,Scalar(0,0,255),2);
+  //std::cout << lastStage.size() << std::endl;
+  //drawContours(laser,lastStage,-1,Scalar(255,0,255),1,8,noArray(),INT_MAX,Point(ROI.x,0));
+  resize(laser,laser,Size(1000,1000));
+  showImage(laser);
   
-   // Mat laser = imread(laserStr);
-     Mat laser = imread(wolaser);
-     /*Mat diff = getDiff(laser,noLaser);
-  Rect ROI(laser.cols/2-25,0,200,laser.rows);
-  Mat cur = diff(ROI);
-  // showImage(cur);
-  Point p = getLaserLocation(cur);
-  std::cout << calcDistance(p.y) << std::endl;
-  showImage(cur);
-  Rect ROI(laser.cols/2 -25,0,200,laser.rows);
+
+
+  //showImage(black);
+  /* std::string wolaser = "Danlaser10without.jpg";
+  Mat laser = imread(laserStr);
+  Mat noLaser = imread(wolaser);
+  Mat diff = getDiff(laser,noLaser);
+  showImage(diff);
+  Rect ROI(laser.cols/2,0,100,3*laser.rows/4);
+  Mat grayROI;
+  diff(ROI).copyTo(grayROI);
+  Mat diffMask;
+  threshold(grayROI,diffMask,12,255,0);
+  Mat other;
+  laser(ROI).copyTo(other);
+  showImage(other);
+  mostRed(other);
+  cvtColor(other,other,CV_BGR2GRAY);
+  Mat totalMask;
+  bitwise_and(other,diffMask,totalMask);
+  Mat onlyLookAt;
+  laser(ROI).copyTo(onlyLookAt,totalMask);
+  cvtColor(onlyLookAt,onlyLookAt,CV_BGR2GRAY);
+  std::vector<std::vector<Point> > contours;
+  findContours(onlyLookAt,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
+  std::vector<std::vector<Point> > circularContours;
+  Point2f smallestPoint;
+  float largestRad = 0;
+  double smallestRatio = 10;
+  for(int i = 0; i < contours.size(); i++) {
+    Point2f center;
+    float rad = 0;
+    minEnclosingCircle(contours[i],center,rad);
+    double ratio = (rad * rad * PI)/contourArea(contours[i]);
+    if(ratio < smallestRatio && largestRad < rad) {
+      smallestPoint = center;
+      smallestRatio = ratio;
+      largestRad = rad;
+    }
+  }
+  std::cout << calcDistance(smallestPoint.y+ROI.y) << std::endl;
+  circle(laser,Point(smallestPoint.x+ROI.x,smallestPoint.y+ROI.y),10,Scalar(0,0,255),4);
+  resize(laser,laser,Size(1000,1000));
+  showImage(laser); 
+  /* Point p = getLaserLocation(cur);
+  circle(cpyLaser,Point(p.x+ROI.x, p.y),5,Scalar(0,0,255),10);
+  std::cout << "LASER Y : " << p.y << std::endl;
+  std::cout << "MID " << laser.rows/2 << std::endl;
+  std::cout << p.y - laser.rows/2 << std::endl;
+  std::cout << calcDistance(p.y) << std::endl;*/
+  //  showImage(cpyLaser);
+  /*
+  /( Rect ROI(laser.cols/2 -25,0,200,laser.rows);
   Mat other = laser(ROI);
   //  showImage(other);
   other = changeToMaxLaser(other);
@@ -991,7 +1322,7 @@ int main() {
   //WORKING CODE DONT TOUCH
   //  VideoCapture cap(0);
 
-  std::string imgName = "output.png";
+  /*std::string imgName = "output.png";
   Mat box = imread(imgName);
    
   Mat output;
@@ -1022,6 +1353,6 @@ int main() {
       circle(output,corners[t],5,Scalar(0,0,0),5);
     }
   }
-  // showImage(output);  
+  // showImage(output);  */
   return 0;
 }

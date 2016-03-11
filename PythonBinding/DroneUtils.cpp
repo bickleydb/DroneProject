@@ -388,15 +388,21 @@ Mat getDiff (Mat& first, Mat& second) {
   return rtn;
 }
 
+
+/*
+Looks through a set of contours, and finds the smallest min enclosing circle.
+If used correctly, this will figure out which contours are the laser dot
+
+ */
 Point2f determineLaserPoint(std::vector<std::vector<Point> >& pts) {
-  Point2f bestPt;
-  double bestRad = 1000;
+  Point2f bestPt; 
+  double bestRad = 1000; //Just a big number
   for(int i = 0; i < pts.size(); i++) {
     std::vector<Point> cur = pts[i];
     Point2f curPoint;
     float curRad;
     minEnclosingCircle(cur,curPoint,curRad);
-    if(curRad < bestRad) {
+    if(curRad < bestRad) { //Pick for smallest area
       bestPt = curPoint;
       bestRad = curRad;
     }
@@ -404,13 +410,17 @@ Point2f determineLaserPoint(std::vector<std::vector<Point> >& pts) {
   return bestPt;
 }
 
-std::vector<std::vector<Point> > findCircleContours (Mat& image) {
+/*
+Finds all of the circle contours is a circle, or close to one
+
+ */
+std::vector<std::vector<Point> > findCircleContours (const Mat& input) {
   std::vector<std::vector<Point> > contours;
-  Canny(image,image,50,150);
   std::vector<std::vector<Point> > approxConts;
   std::vector<std::vector<Point> > circles;
+  Mat image;
+  Canny(input,image,50,150);
   findContours(image,contours,CV_RETR_EXTERNAL,CV_CHAIN_APPROX_SIMPLE);
-
   for(int i = 0; i < contours.size(); i++) {
     std::vector<Point> cont = contours[i];
     double perimeter = arcLength(cont,true);
@@ -420,7 +430,6 @@ std::vector<std::vector<Point> > findCircleContours (Mat& image) {
     approxPolyDP(cont,approx,1,true);
     minEnclosingCircle(approx,center,rad);
     double contArea = contourArea(approx,false);
-
     if(PI*rad*rad <= 1.5*contArea) {
       circles.push_back(approx);
     }
@@ -440,7 +449,7 @@ boost::python::list getLaserLocation (char * img1, char * img2, int width, int h
  return list;
 }
 
-Mat valThresholding(Mat& val) {
+Mat valThresholding(const Mat& val) {
   Mat cpy;
   threshold(val,cpy,90,255,3);
   threshold(cpy,cpy,150,255,4);
@@ -448,14 +457,14 @@ Mat valThresholding(Mat& val) {
   return cpy;
 }
 
-Mat hueThresholding(Mat& hue) {
+Mat hueThresholding(const Mat& hue) {
   Mat cpy;
   threshold(hue,cpy,15,255,4);
   threshold(cpy,cpy,1,255,0);
   return cpy;
 }
 
-Mat satThresholding(Mat& sat) {
+Mat satThresholding(const Mat& sat) {
   Mat cpy;
   threshold(sat,cpy,55,255,3);
   threshold(cpy,cpy,150,255,4);
@@ -463,7 +472,7 @@ Mat satThresholding(Mat& sat) {
   return cpy;
 }
 
-Mat filterOutNonBox(Mat&  box) {
+Mat filterOutNonBox(const Mat&  box) {
   Mat blurred,hsvImg,rtn,mask;
   Mat hsv[3];
   GaussianBlur(box,blurred,Size(7,7),0);
@@ -478,7 +487,7 @@ Mat filterOutNonBox(Mat&  box) {
   return rtn;
 }
 
-std::vector<std::vector<Point> > filterBasedOnArea(std::vector<std::vector<Point> >& contours) {
+std::vector<std::vector<Point> > filterBasedOnArea(const std::vector<std::vector<Point> >& contours) {
   std::vector<std::vector<Point> > rtn;
   for(int i = 0; i < contours.size(); i++) {
     std::vector<Point> approx;
@@ -491,7 +500,7 @@ std::vector<std::vector<Point> > filterBasedOnArea(std::vector<std::vector<Point
   return rtn;
 }
 
-std::vector<Rect> determineBoxes(std::vector<std::vector<Point> >& contours) {
+std::vector<Rect> determineBoxes(const std::vector<std::vector<Point> >& contours) {
   std::vector<Rect> rtn;
   for(int i = 0; i < contours.size(); i++) {
     Rect possible = boundingRect(contours[i]);
@@ -533,7 +542,7 @@ boost::python::list getBoxes(char * img, int width, int height) {
 
 double calcDistance(double yCoor) {
   double z = FB;
-  double denom = yCoor - FM;
+  double denom = std::abs(yCoor - FM);
   z = z / denom;
   return z;
 }
@@ -571,14 +580,14 @@ void threadDoEveryOther(Mat& img) {
   }
 }
 
-Mat changeToMax (Mat& in) {
+Mat changeToMax (const Mat& in) {
   Mat img;
   GaussianBlur(in,img,Size(7,7),0);
   threadDoEveryOther(img);
   return img;
 }
 
-Mat makeMask (Mat& in) {
+Mat makeMask (const Mat& in) {
   Mat bgr[3];
   split(in,bgr);
   return bgr[2];
@@ -587,7 +596,7 @@ bool isUseful(unsigned char i) {
   return i > 1;
 }
 
-std::vector<Rect> findBoxes(Mat& in) {
+std::vector<Rect> findBoxes(const Mat& in) {
   Mat preservedColor;
   Mat redMask, mask,maskedBox,gray;
   Mat bgr[3];
@@ -639,7 +648,7 @@ boost::python::list getAllBoxes (char * img1, int width, int height) {
  return rtn;
 }
 
-Point findLeftCorner(Mat const in, int curX, int curY) {
+Point findLeftCorner(const Mat in, int curX, int curY) {
   int startX = curX;
   int startY = curY;
   Mat lookingAt;
@@ -700,7 +709,7 @@ Point findLeftCorner(Mat const in, int curX, int curY) {
 
 
 
-Point findRightCorner(Mat const in, int curX, int curY) {
+Point findRightCorner(const Mat in, int curX, int curY) {
   int startX = curX;
   int startY = curY;
   int changeX[] = {2,1,0,-1,-2};
@@ -802,13 +811,14 @@ void removeUnsaturatedSecondPass(Mat& in) {
 }
 
 
-std::vector<Point> findBoxCorner (Mat& color) {
+std::vector<Point> findBoxCorner (const Mat& color) {
   Mat in;
-  removeAverageBlackRows(color);
-  removeUnsaturated(color);
-  removeUnsaturatedSecondPass(color);
-   GaussianBlur(color,color,Size(7,7),0);
-  cvtColor(color,in,CV_BGR2GRAY);
+  color.copyTo(in);
+  removeAverageBlackRows(in);
+  removeUnsaturated(in);
+  removeUnsaturatedSecondPass(in);
+  GaussianBlur(in,in,Size(7,7),0);
+  cvtColor(in,in,CV_BGR2GRAY);
   Canny(in,in,50,50);
 
   int curX = 0;
