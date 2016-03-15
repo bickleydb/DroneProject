@@ -147,7 +147,37 @@ size_t KDTree<N, ElemType>::dimension() const {
 /*
 template <size_t N, typename ElemType>
 KDTree<N, ElemType>::KDTree(std::pair<Point<N>, ElemType> *begin, std::pair<Point<N>, ElemType> *end) {
+	node* root = new node(nullptr, nullptr, elems[length / 2]);
+	std::stack<std::tuple<node*, int, int, bool>> iter;
+	iter.emplace(root, 0, length, false);
 
+	node *current;
+	int start, end;
+	bool isR = false;
+	while (!iter.empty()) {
+		std::tie(current, start, end, isR) = iter.top();
+		iter.pop();
+		switch (end - start) {
+		case 0:
+			continue;
+		case 1:
+			if (elems[start] < current->key) {
+				node *left = new node(nullptr, nullptr, elems[start]);
+				current->left = isR ? makeLeftRed(left) : left;
+			}
+			else {
+				current->right = new node(nullptr, nullptr, elems[start]);
+			}
+			break;
+		default:
+			node *left = new node(nullptr, nullptr, elems[(end - start) / 4 + start]);
+			current->left = isR ? makeLeftRed(left) : left;
+			current->right = new node(nullptr, nullptr, elems[(end - start) * 3 / 4 + start]);
+			iter.emplace(current->left, start, (end - start) / 2 + start, !isR);
+			iter.emplace(current->right, (end - start) / 2 + start + 1, end, !isR);
+		}
+	}
+	return root;
 }
 */
 
