@@ -1267,5 +1267,7 @@ BOOST_PYTHON_MODULE(DroneUtils) {
   def("getBoxCorner", getBoxCorner);
   def("getLaserDistOneImg",getLaserDistOneImg);
   def("getLaserDistOneImgLoc",getLaserDistOneImgLoc);
+  def("getLaserConstants",getLaserConstants);
+  
 
 }
