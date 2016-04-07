@@ -35,9 +35,7 @@
 #define HIGH_RED 5
 #define FOCAL_LENGTH 216.79
 #define PAPER_AR 8.5/11.0
-#define FM 834.906
 #define BOX_AR 44.5/22.5
-#define FB 235.398
 
 using namespace cv;
 using namespace std;
@@ -57,7 +55,7 @@ void displayImage(char* img, int width, int height);
 double getPaperDist(char * img, int width, int height);
 void displayImage(char* img, int width, int height);
 double getPaperDistByCorner(char * img, int width, int height);
-double getLaserDist (char * img1, char* img2, int width, int height);
+double getLaserDist (char * img1, char* img2, int width, int height, double FB, double FM);
 double getPaperDistContour(char * img, int width, int height);
 
 /*
@@ -88,18 +86,18 @@ void hsvSplit (Mat const img, std::vector<Mat>& vects);
 double getAverageBright(std::vector<cv::Mat> const img);
 Mat getDiff (Mat& first, Mat& second);
 Point2f determineLaserPoint(const Mat& frame);
-Mat valThresholding(Mat& val);
-Mat hueThresholding(Mat& hue);
-Mat satThresholding(Mat& sat);
-Mat filterOutNonBox(Mat& box);
-double calcDistance(double yCoor);
+Mat valThresholding(const Mat& val);
+Mat hueThresholding(const Mat& hue);
+Mat satThresholding(const Mat& sat);
+Mat filterOutNonBox(const Mat& box);
+double calcDistance(double yCoor, double FB, double FM);
 
 
 std::vector<Point> pickBiggestPaper(std::vector<std::vector<Point> >& possibles);
 std::vector<std::vector<Point> > getPaperShapedContours(std::vector<std::vector<Point> > contours, double ar);
 std::vector<Point> getPaperContour(Mat& img);
-std::vector<std::vector<Point> > filterBasedOnArea(std::vector<std::vector<Point> >& contours);
-std::vector<Rect> determineBoxes(std::vector<std::vector<Point> >& contours);
+std::vector<std::vector<Point> > filterBasedOnArea(const std::vector<std::vector<Point> >& contours);
+std::vector<Rect> determineBoxes(const std::vector<std::vector<Point> >& contours);
 std::vector<std::vector<Point> > findCircleContours (Mat& image);
 
 

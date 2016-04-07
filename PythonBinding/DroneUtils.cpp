@@ -24,7 +24,7 @@ std::vector<KeyPoint> findPaperCornerBased (Mat frame, double avgBright) {
   GaussianBlur(frame,frame,Size(3,3),0);
   ///////////////////////////////////////////
   //This is an iterative deepening kind of thing, starting keypoint detection 
-  //with a large param to find points faster, then going smaller to find more
+  //with a large param to find points faster, then going smaller o find more
   //points
   for(int parameter = 10; parameter > 0; parameter--) {
     double offset = 1; //An offset to look at neighbors of key points later
@@ -542,6 +542,7 @@ Mat filterOutNonBox(const Mat&  box) {
   bitwise_and(mask,maskS,mask);
   hsv[2].copyTo(rtn,mask);
   return rtn;
+  
 }
 
 std::vector<std::vector<Point> > filterBasedOnArea(const std::vector<std::vector<Point> >& contours) {
@@ -593,22 +594,23 @@ boost::python::list getBoxes(char * img, int width, int height) {
     rect.append(boxes[i].height);
     rtn.append(rect);
   }
+  
   return rtn;
 }
 
 
-double calcDistance(double yCoor) {
+double calcDistance(double yCoor, double FB, double FM) {
   double z = FB;
   double denom = std::abs(yCoor - FM);
   z = z / denom;
   return z;
 }
 
-double getLaserDist (char * img1, char* img2, int width, int height) {
+double getLaserDist (char * img1, char* img2, int width, int height, double FB, double FM) {
  cv::Mat image1(cv::Size(width,height),CV_8UC3,img1,cv::Mat::AUTO_STEP);
  cv::Mat image2(cv::Size(width,height),CV_8UC3,img2,cv::Mat::AUTO_STEP);
  Point2f pt = getLaserLoc(image1,image2);
- return calcDistance(pt.y);
+ return calcDistance(pt.y,FB,FM);
 }
 
 void threadDoEveryOther(Mat& img) {
@@ -1028,7 +1030,7 @@ Mat getWhiteOrRed(const Mat& in) {
 }
 
 
-void getLaserConstants(boost::python::list xyPairs) {
+boost::python::list getLaserConstants(boost::python::list xyPairs) {
   std::vector<double> xVals;
   std::vector<double> yVals;
   for( int i = 0; i < boost::python::len(xyPairs); i++) {
@@ -1037,8 +1039,10 @@ void getLaserConstants(boost::python::list xyPairs) {
     yVals.push_back(boost::python::extract<double>(pt[1]));
   }
   Point p  = determineConstants(xVals,yVals);
-  std::cout << "FM " << p.x << std::endl;
-  std::cout << "FB " << p.y << std::endl;
+  boost::python::list rtn;
+  rtn.append(p.x);
+  rtn.append(p.y);
+  return rtn;
 
 }
 Point getCenter(const std::vector<Point>& vec) {
@@ -1207,7 +1211,7 @@ Point getLaserDotLoc(Mat& laser) {
     if(ratioOfRedToNot > bestRatio) {
       bestRatio = ratioOfRedToNot;
       bestPoint = getCenter(lastStage[i]);
-      bestPoint.x += ROI.x;
+      // bestPoint.x += ROI.x;
       }
     }
   }
@@ -1215,19 +1219,22 @@ Point getLaserDotLoc(Mat& laser) {
 }
 
 
-void getLaserDistOneImgLoc(char * img, int width, int height) {
+boost::python::list getLaserDistOneImgLoc(char * img, int width, int height) {
   cv::Mat laser(cv::Size(width,height),CV_8UC3,img,cv::Mat::AUTO_STEP);
   Point best = getLaserDotLoc(laser);
-  std::cout << best << std::endl;
+  boost::python::list rtn;
+  rtn.append(best.x);
+  rtn.append(best.y);
+  return rtn;
 }
 
 
 
 
-double getLaserDistOneImg(char * img, int width, int height) {
+double getLaserDistOneImg(char * img, int width, int height, double FM, double FB) {
   cv::Mat laser(cv::Size(width,height),CV_8UC3,img,cv::Mat::AUTO_STEP);
   Point best = getLaserDotLoc(laser);
-  return calcDistance(best.y);
+  return calcDistance(best.y,FM, FB);
 }
 
 double getLaserLocTest(char * img1, char* img2 , int width, int height) {
@@ -1268,6 +1275,7 @@ BOOST_PYTHON_MODULE(DroneUtils) {
   def("getLaserDistOneImg",getLaserDistOneImg);
   def("getLaserDistOneImgLoc",getLaserDistOneImgLoc);
   def("getLaserConstants",getLaserConstants);
+
   
 
 }

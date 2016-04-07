@@ -7,6 +7,8 @@ import io
 import time
 import numpy as np
 import cv2
+import math
+import RobotAi
 import DroneUtils
 
 ser = serial.Serial('/dev/ttyACM0', 9600, timeout = 0);
@@ -81,12 +83,18 @@ def sendCmd(str):
 	if str == 'q':
 		pointToLeftBox();
 		print "I found the left box!"
+        if str == 'v':
+                calibrate()
 	#Testrun
         if str == '.':
                 takeOnePicture()
 	if str == 'c':
 		automateCalibration();
 		print "Done"
+	if str == 'g':
+		print "Doing stuff on its own.."
+		RobotAi.itsAlive()
+		print "Done doing stuff.."
 	#Quit Program
 	if str == 'quit':
 		ser.close();
@@ -223,14 +231,13 @@ def takeOnePicture():
 
 def takePictures():
         camera = PiCamera()
-        for i in range(0, 20):
-                camera.brightness = i*5
-                camera.resolution = (2592,1944)
-                stream = io.BytesIO()
-                camera.capture(stream,format='png')
-                data = np.fromstring(stream.getvalue(),dtype=np.uint8)
-                image = cv2.imdecode(data,1)
-                cv2.imwrite(str(i*2) + "brightlaser.png",image);
+       # camera.brightness = 100
+        camera.resolution = (2592,1944)
+        stream = io.BytesIO()
+        camera.capture(stream,format='png')
+        data = np.fromstring(stream.getvalue(),dtype=np.uint8)
+        image = cv2.imdecode(data,1)
+        cv2.imwrite("img.png",image);
         camera.close()
         
 def findBox():
@@ -276,9 +283,9 @@ def getCurDist():
 	images = toggleLaserPictures();
 	img1 = cv2.imdecode(images[0],1);
 	#img2 = cv2.imdecode(images[1], 1);
-	#cv2.imwrite("ta.png", img1);
+	cv2.imwrite("ta.png", img1);
 	#cv2.imwrite("tb.png", img2);
-	dist = DroneUtils.getLaserDistOneImg(img1.tostring('c'), img1.shape[1], img1.shape[0]);
+	dist = DroneUtils.getLaserDistOneImg(img1.tostring('c'), img1.shape[1], img1.shape[0],246.056, 897.833);
 	return dist;
 
 
@@ -320,9 +327,23 @@ def getLaserPos():
 	images = toggleLaserPictures();
 	img1 = cv2.imdecode(images[0], 1);
         cv2.imwrite('test.png',img1)
-        DroneUtils.getLaserDistOneImgLoc(img1.tostring('c'), img1.shape[1], img1.shape[0]);
-	#return pos;	
+        pos = DroneUtils.getLaserDistOneImgLoc(img1.tostring('c'), img1.shape[1], img1.shape[0]);
+	return pos;	
 
+
+def calibrate():
+        startDist = 5
+        ptsLst = []
+        laserPt = getLaserPos()
+        ptsLst.append(laserPt)
+        ser.write('mf0001');
+        for i in range(0,startDist):
+                lasarPt = getLaserPos()
+                ser.write('mf0001')
+                ptsLst.append(lasarPt)
+        consts = DroneUtils.getLaserConstants()
+        print(consts[0])
+        
 
 ##################################################################################
 #	This method moves the robot in 5 foot increments, taking two images of its
