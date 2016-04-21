@@ -161,7 +161,7 @@ void displayImageInner(Mat image) {
 //The width is going to be the smallest out of the width,height, and diagonal, or else the paper would be rectangular
 //This method takes a vector of KeyPoints, best used with FAST KeyPoint detection and similar algorithms
 double getWidth(std::vector<KeyPoint> paper) {
-  assert(paper.size() % 4 == 0);
+  //assert(paper.size() % 4 == 0);
    double dist1 = std::sqrt(std::pow(paper[0].pt.x - paper[1].pt.x,2) + std::pow(paper[0].pt.y - paper[1].pt.y,2));
   double dist2 = std::sqrt(std::pow(paper[0].pt.x - paper[2].pt.x,2) + std::pow(paper[0].pt.y - paper[2].pt.y,2));
   double dist3 = std::sqrt(std::pow(paper[0].pt.x - paper[3].pt.x,2) + std::pow(paper[0].pt.y - paper[3].pt.y,2));
@@ -175,7 +175,7 @@ double getWidth(std::vector<KeyPoint> paper) {
 //The width is going to be the smallest out of the width,height, and diagonal, or else the paper would be rectangular
 //This method takes a vector of Points, best used when working with Contours.
 double getWidth(std::vector<Point> paper) {
-  assert(paper.size() == 4);
+  // assert(paper.size() == 4);
    double dist1 = std::sqrt(std::pow(paper[0].x - paper[1].x,2) + std::pow(paper[0].y - paper[1].y,2));
   double dist2 = std::sqrt(std::pow(paper[0].x - paper[2].x,2) + std::pow(paper[0].y - paper[2].y,2));
   double dist3 = std::sqrt(std::pow(paper[0].x - paper[3].x,2) + std::pow(paper[0].y - paper[3].y,2));
@@ -1034,9 +1034,11 @@ boost::python::list getLaserConstants(boost::python::list xyPairs) {
   std::vector<double> xVals;
   std::vector<double> yVals;
   for( int i = 0; i < boost::python::len(xyPairs); i++) {
+  
     boost::python::list pt = boost::python::extract<boost::python::list>(xyPairs[i]);
     xVals.push_back(boost::python::extract<double>(pt[0]));
     yVals.push_back(boost::python::extract<double>(pt[1]));
+    std::cout << xVals[xVals.size()-1] << ", " << yVals[yVals.size() - 1] << std::endl;
   }
   Point p  = determineConstants(xVals,yVals);
   boost::python::list rtn;
@@ -1215,7 +1217,7 @@ Point getLaserDotLoc(Mat& laser) {
       }
     }
   }
-  return Point(bestPoint.x+ROI.x,bestPoint.y);
+  return Point(bestPoint.x,bestPoint.y);
 }
 
 

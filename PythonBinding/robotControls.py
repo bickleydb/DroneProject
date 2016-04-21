@@ -8,18 +8,29 @@ import time
 import numpy as np
 import cv2
 import math
-import RobotAi
+import random
+import RobotAI
 import DroneUtils
 
 ser = serial.Serial('/dev/ttyACM0', 9600, timeout = 0);
+
+def danceMonkeyDance():
+        print("wat")
+        for i in range(1,30):
+                print(i)
+                ser.write('m' + random.choice(['l','r']) +str(random.choice(range(0,359))).zfill(4));
+               # time.sleep(2)
+        
 
 def sendCmd(str):
 # To move the robot a specific distance, just include it as the modifer value
 # To move the robot 1 foot, send mf0001.
 # To move the robot 10 feet, send mf0010.
 	#Move Forward
+        if str == 'm':
+                danceMonkeyDance()
 	if str == 'w':
-		ser.write('mf0001');
+		ser.write('mf0100');
 	#Move Backward
 	if str == 's':
 		ser.write('mb0001');
@@ -28,10 +39,10 @@ def sendCmd(str):
 # Degree turns can be 360, 180, 90, 45, and 20 degrees
 	#Turn Left
 	if str == 'a':
-		ser.write('ml0045');
+		ser.write('ml0090');
 	#Turn Right
 	if str == 'd':
-	 	ser.write('mr0045');
+	 	ser.write('mr0090');
 	#Laser Toggle
 	if str == 'f':
 		ser.write('l00000');
@@ -40,13 +51,13 @@ def sendCmd(str):
 		ser.write('su0001');
 	#Move Servo Right 5 degrees
 	if str == 'l':
-		ser.write('sr0001');
+		ser.write('sr0090');
 	#Move Servo Down 5 degrees
 	if str == 'k':
 		ser.write('sd0001');
 	#Move Servo Left 5 degrees
 	if str == 'j':
-		ser.write('sl0001');
+		ser.write('sl0090');
 	#Reset servos
 	if str == 'x':
 		ser.write('sx0000');
@@ -92,9 +103,9 @@ def sendCmd(str):
 		automateCalibration();
 		print "Done"
 	if str == 'g':
-		print "Doing stuff on its own.."
-		RobotAi.itsAlive()
-		print "Done doing stuff.."
+		RobotAI.itsAlive()
+		print "Dancing.."
+	#	danceMonkeyDance()
 	#Quit Program
 	if str == 'quit':
 		ser.close();
@@ -190,7 +201,7 @@ def toggleLaserPictures():
 def laserOnOffPictures():
 	camera = PiCamera()
 	camera.resolution = (2592, 1944)
-	stream = ioBytesIO()
+	stream = io.BytesIO()
 	#Laser on, picture time
 	ser.write('100000')
 	time.sleep(2)
@@ -204,9 +215,24 @@ def laserOnOffPictures():
 	camera.capture(stream, format='png')
 	img2Data = np.fromstring(stream.getvalue(), dtype=np.uint8)
 	stream.close()
-	images = [img1Data, img2Data]
+	images = [img1Data]
 	camera.close()
 	return images
+
+
+def getOnePic():
+        print("WATER")
+	camera = PiCamera()
+	camera.resolution = (2592, 1944)
+	stream = io.BytesIO()
+	ser.write('l00000')
+	time.sleep(2)
+	camera.capture(stream, format='png')
+        camera.close()
+	img1Data = np.fromstring(stream.getvalue(), dtype=np.uint8)
+	stream.close();
+        ser.write('l00000')
+	return img1Data
 
 # DO NOT MESS WITH THIS PLZ
 #SRSLY NEED FOR LAZAR
@@ -231,7 +257,7 @@ def takeOnePicture():
 
 def takePictures():
         camera = PiCamera()
-       # camera.brightness = 100
+        #
         camera.resolution = (2592,1944)
         stream = io.BytesIO()
         camera.capture(stream,format='png')
@@ -243,6 +269,7 @@ def takePictures():
 def findBox():
         camera = PiCamera()
         camera.resolution = (2592,1944)
+        camera.brightness = 75
         stream= io.BytesIO()
         camera.capture(stream,format='png')
         data = np.fromstring(stream.getvalue(),dtype=np.uint8)
@@ -285,7 +312,7 @@ def getCurDist():
 	#img2 = cv2.imdecode(images[1], 1);
 	cv2.imwrite("ta.png", img1);
 	#cv2.imwrite("tb.png", img2);
-	dist = DroneUtils.getLaserDistOneImg(img1.tostring('c'), img1.shape[1], img1.shape[0],246.056, 897.833);
+	dist = DroneUtils.getLaserDistOneImg(img1.tostring('c'), img1.shape[1], img1.shape[0],255.405, 922.538);
 	return dist;
 
 
@@ -294,10 +321,16 @@ def getCurDist():
 # its distance by utilizing its contour lines.
 # @ return dist -distance in feet
 def getPaperDist():
-	images = laserTogglePictures();
-	img = cv2.imdecode(images[1], 1);
-	cv2.imwrite("t1a.png", img);
-	dist = DroneUtils.getPaperDistByCorner(img.tostring('c'), img.shape[1], img.shape[0]);
+	images = laserOnOffPictures();
+	img = cv2.imdecode(images[0], 1);
+	#cv2.imwrite("t1a.png", img);
+	dist = DroneUtils.getPaperDistContour(img.tostring('c'), img.shape[1], img.shape[0]);
+	return dist;
+
+
+def getPaperDistWithDat(image):
+        img = cv2.imdecode(image,1)
+        dist = DroneUtils.getPaperDistContour(img.tostring('c'), img.shape[1], img.shape[0]);
 	return dist;
 
 
@@ -317,6 +350,12 @@ def getPaperPoints():
 	return pointList;
 
 
+def getLaserPosWithDat(image):
+	img1 = cv2.imdecode(image, 1);
+        pos = DroneUtils.getLaserDistOneImgLoc(img1.tostring('c'), img1.shape[1], img1.shape[0]);
+	return pos;	
+
+
 ##################################################################################
 #	This method returns the x,y position of the laser within the image. The
 # first value in the list is the laser's x-cord. and the second is the y-cord.
@@ -332,17 +371,31 @@ def getLaserPos():
 
 
 def calibrate():
-        startDist = 5
+        print("wat")
+        startDist = 10
         ptsLst = []
-        laserPt = getLaserPos()
-        ptsLst.append(laserPt)
+        img = getOnePic()
+        distance= getPaperDistWithDat(img)
+        laserPt = getLaserPosWithDat(img)
+        apndLst = [distance, laserPt[1]]
+        ptsLst.append(apndLst)
         ser.write('mf0001');
-        for i in range(0,startDist):
-                lasarPt = getLaserPos()
+        time.sleep(2)
+        print("ALL OF MY WAT")
+        for i in xrange(3):
+                img = getOnePic()
+                distance = getPaperDistWithDat(img)
+                lasarPt = getLaserPosWithDat(img)
+                apnd = [distance, lasarPt[1]]
                 ser.write('mf0001')
-                ptsLst.append(lasarPt)
-        consts = DroneUtils.getLaserConstants()
+                ptsLst.append(apnd)
+                time.sleep(2)
+        print(ptsLst)
+        consts = DroneUtils.getLaserConstants(ptsLst)
         print(consts[0])
+        print(consts[1])
+        
+        
         
 
 ##################################################################################
