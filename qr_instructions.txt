@@ -1,0 +1,24 @@
+QR Code Instructions
+
+Specification:
+This is the instruction to help you install and use qr code based scanner on Raspberry pi and extract the information encoded in the QR code.
+
+1.	Installation
+a.	Open terminal in pi
+b.	sudo aptget libpython-dev
+c.	pip install zbar
+d.	sudo apt-get zbar-tools
+e.	Wget https://github.com/npinchot/zbar/archive/master.zip 		
+    // THIS IS IMPORTANT AS IF YOU INSTALL DIFFERENT(NORMAL) VERSION OF ZBAR, IT WON”T WORK ON PI. YOU HAVE TO USE THIS CUSTOMIZED VERSION.
+f.	Unzip master.zip
+g.	Cd zbar-mkaster
+h.	Sudo python setup.py install
+
+
+2.	Usage
+a.	Open termianl in pi
+b.	Python qrReading.py
+c.	In the opened window is the screen from your pi camera. 
+d.	Rotate your camera towards one or more QR codes
+e.	The information encoded in the QR code(s) will appear on the window.
+f.	If you want to directly access the information contained in the qr codes, you can use the function extractInfo() in the qrReaing.py
